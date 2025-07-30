@@ -93,28 +93,28 @@ def check_region_alert():
 def check_air_alert(region="Броварський район"):
     try:
         url = "https://alerts.in.ua/"
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.content, "html.parser")
 
-        # Збереження HTML для відладки
-        with open("debug.html", "w", encoding="utf-8") as f:
-            f.write(response.text)
-
         g_tag = soup.find("g", attrs={"data-raion": region})
         if g_tag:
+            # Шукай усі path усередині <g>
             path_tags = g_tag.find_all("path")
             for tag in path_tags:
                 classes = tag.get("class", [])
                 if isinstance(classes, str):
                     classes = classes.split()
-                print("⛅ Знайдено класи:", classes)
                 if "air-raid" in classes and "active" in classes:
-                    return True
-        return False
+                    return True  # Тривога активна
+        return False  # Тривоги немає
     except Exception as e:
         print(f"❌ Помилка при перевірці тривоги для {region}: {e}")
         return False
+
+
 
 # --- Основна логіка бота ---
 async def main():
@@ -132,6 +132,7 @@ async def main():
         print("❌ USER_CHAT_ID не встановлено")
         return
 
+        # Повідомлення при запуску
     try:
         requests.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
@@ -140,6 +141,7 @@ async def main():
     except Exception as e:
         print(f"Помилка при надсиланні тестового повідомлення: {e}")
 
+    # --- Негайна перевірка, якщо тривога вже активна ---
     region_alert = check_region_alert()
     brovary_alert = check_air_alert()
 
@@ -157,6 +159,7 @@ async def main():
         print("🔔 Повідомлення про активну тривогу надіслано одразу після запуску")
 
     last_status = {"region": region_alert, "brovary": brovary_alert}
+
     ping_interval = 3600
 
     while True:
@@ -193,6 +196,7 @@ async def main():
             print(f"Помилка в основному циклі: {e}")
             await asyncio.sleep(60)
 
+# --- Запуск Flask і нескінченний цикл з перезапуском бота ---
 # --- Запуск Flask і нескінченний цикл з перезапуском бота ---
 if __name__ == "__main__":
     print("🔎 Перевірка тривоги вручну:")
