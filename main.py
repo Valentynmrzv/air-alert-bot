@@ -128,6 +128,7 @@ async def main():
         print("❌ USER_CHAT_ID не встановлено")
         return
 
+        # Повідомлення при запуску
     try:
         requests.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
@@ -136,7 +137,25 @@ async def main():
     except Exception as e:
         print(f"Помилка при надсиланні тестового повідомлення: {e}")
 
-    last_status = {"region": False, "brovary": False}
+    # --- Негайна перевірка, якщо тривога вже активна ---
+    region_alert = check_region_alert()
+    brovary_alert = check_air_alert()
+
+    if region_alert or brovary_alert:
+        parts = []
+        if brovary_alert:
+            parts.append("📍 *Броварський район*")
+        if region_alert:
+            parts.append("📍 *Київська область*")
+        msg = "🚨 Повітряна тривога!\n" + "\n".join(parts)
+        send_telegram_message(
+            text=msg,
+            image_url="https://image.thum.io/get/width/800/crop/700/fullpage/https://alerts.in.ua/"
+        )
+        print("🔔 Повідомлення про активну тривогу надіслано одразу після запуску")
+
+    last_status = {"region": region_alert, "brovary": brovary_alert}
+
     ping_interval = 3600
 
     while True:
