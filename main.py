@@ -92,32 +92,28 @@ def check_region_alert():
 # --- Універсальна перевірка тривоги по району ---
 def check_air_alert(region="Броварський район"):
     try:
-        response = requests.get("https://alerts.in.ua/",
-                                 headers={"User-Agent": "Mozilla/5.0"},
-                                 timeout=10)
+        url = "https://alerts.in.ua/"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.content, "html.parser")
 
-        # Перевірка тегу <g>
         g_tag = soup.find("g", attrs={"data-raion": region})
         if g_tag:
-            classes = g_tag.get("class", [])
-            if isinstance(classes, str):
-                classes = classes.split()
-            if "active" in classes:
-                return True
-
-        # Якщо <g> не має класу 'active', перевірити <path>
-        for path in soup.find_all("path", attrs={"data-raion": region}):
-            cls = path.get("class", [])
-            if isinstance(cls, str):
-                cls = cls.split()
-            if "active" in cls and "air-raid" in cls:
-                return True
-
-        return False
+            # Шукай усі path усередині <g>
+            path_tags = g_tag.find_all("path")
+            for tag in path_tags:
+                classes = tag.get("class", [])
+                if isinstance(classes, str):
+                    classes = classes.split()
+                if "air-raid" in classes and "active" in classes:
+                    return True  # Тривога активна
+        return False  # Тривоги немає
     except Exception as e:
         print(f"❌ Помилка при перевірці тривоги для {region}: {e}")
         return False
+
 
 
 # --- Основна логіка бота ---
