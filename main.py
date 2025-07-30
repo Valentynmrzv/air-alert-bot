@@ -93,14 +93,13 @@ def check_region_alert():
 # --- Універсальна перевірка тривоги по району ---
 def check_air_alert(name="Броварська територіальна громада"):
     try:
-        url = "https://alerts.in.ua/api/states?detailed=true"
+        url = "https://alerts.in.ua/api/states.json"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
         data = response.json()
 
-        # Шукаємо об'єкт з точною назвою
         for item in data:
             if item.get("name") == name:
                 return item.get("alert", False)
@@ -111,7 +110,6 @@ def check_air_alert(name="Броварська територіальна гро
     except Exception as e:
         print(f"❌ Помилка при перевірці тривоги для {name}: {e}")
         return False
-
 # --- Основна логіка бота ---
 async def main():
     bot_token = os.environ.get("BOT_TOKEN")
