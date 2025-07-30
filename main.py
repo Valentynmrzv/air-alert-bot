@@ -8,6 +8,7 @@ import asyncio
 from bs4 import BeautifulSoup
 import threading
 from flask import Flask, jsonify
+import requests
 
 start_time = time.time()
 last_ping_time = time.time()
@@ -90,30 +91,25 @@ def check_region_alert():
         return False
 
 # --- Універсальна перевірка тривоги по району ---
-def check_air_alert(region="Броварський район"):
+def check_air_alert(name="Броварська територіальна громада"):
     try:
-        url = "https://alerts.in.ua/"
+        url = "https://alerts.in.ua/api/states?detailed=true"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.content, "html.parser")
+        response.raise_for_status()
 
-        # Збереження HTML для відладки
-        with open("debug.html", "w", encoding="utf-8") as f:
-            f.write(response.text)
+        data = response.json()
 
-        g_tag = soup.find("g", attrs={"data-raion": region})
-        if g_tag:
-            path_tags = g_tag.find_all("path")
-            for tag in path_tags:
-                classes = tag.get("class", [])
-                if isinstance(classes, str):
-                    classes = classes.split()
-                print("⛅ Знайдено класи:", classes)
-                if "air-raid" in classes and "active" in classes:
-                    return True
+        # Шукаємо об'єкт з точною назвою
+        for item in data:
+            if item.get("name") == name:
+                return item.get("alert", False)
+
+        print(f"⚠️ Не знайдено об'єкта з назвою: {name}")
         return False
+
     except Exception as e:
-        print(f"❌ Помилка при перевірці тривоги для {region}: {e}")
+        print(f"❌ Помилка при перевірці тривоги для {name}: {e}")
         return False
 
 # --- Основна логіка бота ---
