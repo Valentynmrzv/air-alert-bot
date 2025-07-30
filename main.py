@@ -202,6 +202,9 @@ async def main():
 
 # --- Запуск Flask і нескінченний цикл з перезапуском бота ---
 if __name__ == "__main__":
+  print("🔎 Перевірка тривоги вручну:")
+    print("Броварський район:", check_air_alert("Броварський район"))
+
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
