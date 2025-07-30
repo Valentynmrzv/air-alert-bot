@@ -79,18 +79,26 @@ def send_ping_to_user():
     except Exception as e:
         print(f"Помилка при надсиланні ping-повідомлення: {e}")
 
+
 # --- Перевірка тривоги по області ---
-def check_region_alert():
+def check_region_alert(region_name="Київська область"):
     try:
-        r = requests.get("https://alerts.com.ua/api/states", timeout=10)
+        r = requests.get("https://alerts.in.ua/api/states.json", timeout=10)
+        r.raise_for_status()
         data = r.json()
-        kyiv_region = data.get("Київська область", {})
-        return kyiv_region.get("alert", False)
-    except Exception as e:
-        print(f"Помилка при запиті області: {e}")
+
+        for item in data:
+            if item.get("name") == region_name:
+                return item.get("alert", False)
+
+        print(f"⚠️ Область '{region_name}' не знайдена.")
         return False
 
-# --- Універсальна перевірка тривоги по району ---
+    except Exception as e:
+        print(f"❌ Помилка при запиті області: {e}")
+        return False
+
+# --- Універсальна перевірка тривоги по громаді/району/місту ---
 def check_air_alert(name="Броварська територіальна громада"):
     try:
         url = "https://alerts.in.ua/api/states.json"
@@ -110,6 +118,7 @@ def check_air_alert(name="Броварська територіальна гро
     except Exception as e:
         print(f"❌ Помилка при перевірці тривоги для {name}: {e}")
         return False
+
 # --- Основна логіка бота ---
 async def main():
     bot_token = os.environ.get("BOT_TOKEN")
