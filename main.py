@@ -99,17 +99,18 @@ def check_air_alert(region="Броварський район"):
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.content, "html.parser")
 
-        path_tags = soup.find_all("path", attrs={"data-raion": region})
-        for tag in path_tags:
-            classes = tag.get("class", [])
+        g_tag = soup.find("g", attrs={"data-raion": region})
+        if g_tag:
+            classes = g_tag.get("class", [])
             if isinstance(classes, str):
                 classes = classes.split()
-            if "air-raid" in classes and "active" in classes:
+            if "active" in classes:
                 return True
         return False
     except Exception as e:
-        print(f"Помилка при перевірці тривоги для {region}: {e}")
+        print(f"❌ Помилка при перевірці тривоги для {region}: {e}")
         return False
+
 
 # --- Основна логіка бота ---
 async def main():
@@ -162,15 +163,6 @@ async def main():
                 )
                 print(f"🔔 Сповіщення надіслано: {msg}")
                 last_status = alert_now
-                 # 🧪 Тест: перевірити надсилання в канал
-            test = os.environ.get("TEST_CHANNEL_MESSAGE")
-            if test == "1":
-                print("🔍 Виконується тест надсилання повідомлення в канал...")
-                test_ok = send_telegram_message("🧪 Тестове повідомлення в канал")
-                if test_ok:
-                    print("✅ Надіслано успішно")
-                else:
-                    print("❌ Не вдалося надіслати повідомлення в канал")
 
             if time.time() - last_ping_time > ping_interval:
                 send_ping_to_user()
