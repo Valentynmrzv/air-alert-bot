@@ -174,13 +174,4 @@ async def main():
 
 # --- Запуск Flask і нескінченний цикл з перезапуском бота ---
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    while True:
-        try:
-            asyncio.run(main())
-        except Exception as e:
-            print(f"❌ Бот впав. Перезапуск через 5 секунд... {e}")
-            time.sleep(5)
+    asyncio.run(main())
