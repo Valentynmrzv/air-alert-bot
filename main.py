@@ -162,6 +162,15 @@ async def main():
                 )
                 print(f"🔔 Сповіщення надіслано: {msg}")
                 last_status = alert_now
+                 # 🧪 Тест: перевірити надсилання в канал
+            test = os.environ.get("TEST_CHANNEL_MESSAGE")
+            if test == "1":
+                print("🔍 Виконується тест надсилання повідомлення в канал...")
+                test_ok = send_telegram_message("🧪 Тестове повідомлення в канал")
+                if test_ok:
+                    print("✅ Надіслано успішно")
+                else:
+                    print("❌ Не вдалося надіслати повідомлення в канал")
 
             if time.time() - last_ping_time > ping_interval:
                 send_ping_to_user()
@@ -174,4 +183,13 @@ async def main():
 
 # --- Запуск Flask і нескінченний цикл з перезапуском бота ---
 if __name__ == "__main__":
-    asyncio.run(main())
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    while True:
+        try:
+            asyncio.run(main())
+        except Exception as e:
+            print(f"❌ Бот впав. Перезапуск через 5 секунд... {e}")
+            time.sleep(5)
