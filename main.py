@@ -83,7 +83,7 @@ def send_ping_to_user():
 # --- Перевірка тривоги по області ---
 def check_region_alert(region_name="Київська область"):
     try:
-        r = requests.get("https://alerts.in.ua/api/states.json", timeout=10)
+        r = requests.get("https://alerts.in.ua/api/states", timeout=10)
         r.raise_for_status()
         data = r.json()
 
@@ -101,7 +101,7 @@ def check_region_alert(region_name="Київська область"):
 # --- Універсальна перевірка тривоги по громаді/району/місту ---
 def check_air_alert(name="Броварська територіальна громада"):
     try:
-        url = "https://alerts.in.ua/api/states.json"
+        url = "https://alerts.in.ua/api/states"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
