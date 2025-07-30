@@ -89,17 +89,26 @@ def check_region_alert():
         print(f"Помилка при запиті області: {e}")
         return False
 
-# --- Перевірка тривоги по Броварському району ---
-def check_brovary_alert():
+# --- Універсальна перевірка тривоги по району ---
+def check_air_alert(region="Броварський район"):
     try:
-        html = requests.get("https://alerts.in.ua/", timeout=10).text
-        soup = BeautifulSoup(html, "html.parser")
-        tag = soup.find("g", {"data-raion": "Броварський район"})
-        if tag and "active" in tag.get("class", []):
-            return True
+        url = "https://alerts.in.ua/"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        path_tags = soup.find_all("path", attrs={"data-raion": region})
+        for tag in path_tags:
+            classes = tag.get("class", [])
+            if isinstance(classes, str):
+                classes = classes.split()
+            if "air-raid" in classes and "active" in classes:
+                return True
         return False
     except Exception as e:
-        print(f"Помилка при перевірці Броварів: {e}")
+        print(f"Помилка при перевірці тривоги для {region}: {e}")
         return False
 
 # --- Основна логіка бота ---
@@ -118,7 +127,6 @@ async def main():
         print("❌ USER_CHAT_ID не встановлено")
         return
 
-    # Повідомлення при запуску
     try:
         requests.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
@@ -128,12 +136,12 @@ async def main():
         print(f"Помилка при надсиланні тестового повідомлення: {e}")
 
     last_status = {"region": False, "brovary": False}
-    ping_interval = 3600  # 1 година
+    ping_interval = 3600
 
     while True:
         try:
             region_alert = check_region_alert()
-            brovary_alert = check_brovary_alert()
+            brovary_alert = check_air_alert("Броварський район")
 
             alert_now = {"region": region_alert, "brovary": brovary_alert}
 
