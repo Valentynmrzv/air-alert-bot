@@ -1,6 +1,6 @@
 import asyncio
 from dotenv import load_dotenv
-# from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
+from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
 from utils.sender import send_alert_message
 from utils.state_manager import load_state, save_state
 
@@ -21,6 +21,7 @@ async def monitor_loop():
             district = result.get('district', 'Броварський район')
             threat = result.get('threat_type')
 
+            # 1. Повітряна тривога
             if "тривога" in text.lower() and msg_id not in state['sent']:
                 message = f"🚨 *Повітряна тривога!*\n📍 {district}"
                 await send_alert_message(message)
@@ -28,11 +29,13 @@ async def monitor_loop():
                 alert_active = True
                 save_state(state)
 
+            # 2. Тип загрози
             elif threat and msg_id not in threat_sent:
                 message = f"🔻 *Тип загрози:* {threat}\n📍 {district}\n[Джерело]({link})"
                 await send_alert_message(message)
                 threat_sent.add(msg_id)
 
+            # 3. Відбій тривоги
             elif "відбій" in text.lower() and msg_id not in state['sent']:
                 message = f"✅ *Відбій тривоги.*\n📍 {district}"
                 await send_alert_message(message)
@@ -45,8 +48,8 @@ async def monitor_loop():
 
 async def main():
     await asyncio.gather(
-        start_monitoring(),
-        monitor_loop()
+        start_monitoring(),   # Telethon слухає повідомлення
+        monitor_loop()        # Бот аналізує чергу
     )
 
 if __name__ == "__main__":
