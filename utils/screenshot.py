@@ -9,7 +9,7 @@ async def take_alert_screenshot():
     output_dir = "screenshots"
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f"alert_{timestamp}.png")
-    url = "https://map.ukrainealarm.com/"
+    url = "https://alerts.in.ua/"
 
     chrome_options = Options()
     chrome_options.add_argument("--headless")
