@@ -12,10 +12,11 @@ async def take_alert_screenshot():
     command = [
     "wkhtmltoimage",
     "--width", "1024",
-    "--height", "768",  # Додаємо фіксовану висоту
+    "--height", "768",  # Фіксована висота
+    "--disable-smart-width",
     url,
     output_path
-    ]   
+    ] 
     try:
         subprocess.run(command, check=True)
         print(f"🖼 Скріншот збережено: {output_path}")
