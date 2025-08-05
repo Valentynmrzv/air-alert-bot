@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
-from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
+import alert_sources.telegram_checker as tg_checker
 from utils.state_manager import load_state, save_state
 from utils.screenshot import take_alert_screenshot
 from utils.sender import send_alert_message, send_start_message, edit_message, send_alert_with_screenshot
@@ -15,7 +15,7 @@ async def monitor_loop(channel_id):
     threat_sent = set()
 
     while True:
-        result = await check_telegram_channels()
+        result = await tg_checker.check_telegram_channels()
 
         if result:
             text = result['text']
@@ -60,13 +60,22 @@ async def monitor_loop(channel_id):
 
         await asyncio.sleep(2)
 
-
 async def main():
     start_time = datetime.now()
     user_chat_id = os.getenv("USER_CHAT_ID")
     channel_id = os.getenv("CHANNEL_ID")
 
     state = load_state()
+
+    # Підключення і авторизація Telethon
+    await tg_checker.client.connect()
+    if not await tg_checker.client.is_user_authorized():
+        print("❗ Не авторизовано. Будь ласка, запустіть authorize.py для первинної авторизації.")
+        return
+
+    # Підвантаження останніх повідомлень для підхоплення активних тривог
+    await tg_checker.fetch_last_messages(state)
+    save_state(state)
 
     if "start_message_id" not in state or state["start_message_id"] is None:
         start_message_id = await send_start_message(start_time, user_chat_id)
@@ -98,7 +107,7 @@ async def main():
             await asyncio.sleep(1800)
 
     await asyncio.gather(
-        start_monitoring(),
+        tg_checker.start_monitoring(),
         monitor_loop(channel_id),
         update_status()
     )

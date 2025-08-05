@@ -9,7 +9,7 @@ from alert_sources.classifier import classify_message
 load_dotenv()
 
 api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH")
+api_hash = os.getenv("API_HASH"))
 phone = os.getenv("TELEGRAM_PHONE")
 
 client = TelegramClient('session', api_id, api_hash)
@@ -31,9 +31,8 @@ async def handler(event):
             await message_queue.put(classified)
 
 async def start_monitoring():
-    await client.connect()
     if not await client.is_user_authorized():
-        print("❗ Не авторизовано. Будь ласка, запустіть скрипт вручну для первинної авторизації.")
+        print("❗ Не авторизовано. Будь ласка, запустіть authorize.py для первинної авторизації.")
         return
     print("🟢 Telethon запущено і слухає канали...")
 
@@ -49,3 +48,13 @@ async def check_telegram_channels():
         return message_queue.get_nowait()
     except asyncio.QueueEmpty:
         return None
+
+async def fetch_last_messages(state, limit=10):
+    for username in monitored_channels:
+        try:
+            async for message in client.iter_messages(username, limit=limit):
+                classified = classify_message(message.text, f"https://t.me/{username}/{message.id}")
+                if classified and classified["id"] not in state['sent']:
+                    await message_queue.put(classified)
+        except Exception as e:
+            print(f"❌ Помилка при завантаженні повідомлень з {username}: {e}")
