@@ -5,6 +5,7 @@ from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from dotenv import load_dotenv
 from alert_sources.classifier import classify_message
+from datetime import datetime
 
 load_dotenv()
 
@@ -50,19 +51,26 @@ async def check_telegram_channels():
     except asyncio.QueueEmpty:
         return None
 
-async def fetch_last_messages(state, limit=20):
-    """
-    Завантажує останні повідомлення з усіх каналів для обробки активних тривог при старті.
-    """
+async def fetch_last_messages(monitor_start_time: datetime):
+    """Підвантажує останні повідомлення з каналів, які не старші за monitor_start_time"""
+    if not await client.is_user_authorized():
+        print("❗ Не авторизовано для підвантаження останніх повідомлень.")
+        return
+    print(f"🔄 Підвантаження останніх повідомлень з каналів, починаючи з {monitor_start_time.isoformat()}")
+
     for username in monitored_channels:
         try:
             entity = await client.get_entity(username)
-            messages = await client.get_messages(entity, limit=limit)
-            for message in reversed(messages):  # від старих до нових
-                text = message.raw_text
-                url = f"https://t.me/{username}/{message.id}"
-                classified = classify_message(text, url)
-                if classified and classified["id"] not in state.get('sent', []):
-                    await message_queue.put(classified)
+            messages = await client.get_messages(entity, limit=50)
+            # Ідемо від старих до нових
+            for msg in reversed(messages):
+                if msg.date >= monitor_start_time:
+                    classified = classify_message(msg.text, f"https://t.me/{username}/{msg.id}")
+                    if classified:
+                        classified["id"] = msg.id
+                        await message_queue.put(classified)
+                else:
+                    # Якщо повідомлення ще старше, пропускаємо
+                    pass
         except Exception as e:
-            print(f"❌ Помилка при завантаженні повідомлень з {username}: {e}")
+            print(f"❌ Помилка підвантаження повідомлень з каналу {username}: {e}")

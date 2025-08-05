@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import alert_sources.telegram_checker as tg_checker
 from utils.state_manager import load_state, save_state
@@ -19,8 +19,6 @@ async def monitor_loop(channel_id):
 
         if result:
             text = result['text']
-            print(f"Отримано повідомлення: {text}")  # <-- Додаємо логування тексту
-
             link = result['url']
             msg_id = result['id']
             district = result.get('district', 'Броварський район')
@@ -48,7 +46,7 @@ async def monitor_loop(channel_id):
                 threat_sent.clear()
                 save_state(state)
 
-            elif msg_id not in threat_sent and alert_active:
+            elif alert_active and msg_id not in threat_sent:
                 try:
                     if threat:
                         message = f"🔻 *Тип загрози:* {threat}\n📍 {district}\n[Джерело]({link})"
@@ -64,6 +62,8 @@ async def monitor_loop(channel_id):
 
 async def main():
     start_time = datetime.now()
+    monitor_start_time = start_time - timedelta(minutes=10)
+
     user_chat_id = os.getenv("USER_CHAT_ID")
     channel_id = os.getenv("CHANNEL_ID")
 
@@ -75,8 +75,8 @@ async def main():
         print("❗ Не авторизовано. Будь ласка, запустіть authorize.py для первинної авторизації.")
         return
 
-    # Підвантаження останніх повідомлень для підхоплення активних тривог
-    await tg_checker.fetch_last_messages(state)
+    # Підвантаження останніх повідомлень для підхоплення активних тривог за останні 10 хв
+    await tg_checker.fetch_last_messages(monitor_start_time)
     save_state(state)
 
     if "start_message_id" not in state or state["start_message_id"] is None:
