@@ -1,7 +1,8 @@
 import asyncio
+from datetime import datetime
 from dotenv import load_dotenv
 from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
-from utils.sender import send_alert_message
+from utils.sender import send_alert_message, send_start_message, edit_message
 from utils.state_manager import load_state, save_state
 
 load_dotenv()
@@ -47,9 +48,19 @@ async def monitor_loop():
         await asyncio.sleep(2)
 
 async def main():
+    start_time = datetime.now()
+    message_id = await send_start_message(start_time)
+
+    async def update_status():
+        while True:
+            if message_id:
+                await edit_message(start_time, message_id)
+            await asyncio.sleep(3600)  # оновлювати кожну годину
+
     await asyncio.gather(
-        start_monitoring(),   # Telethon слухає повідомлення
-        monitor_loop()        # Бот аналізує чергу
+        start_monitoring(),
+        monitor_loop(),
+        update_status()
     )
 
 if __name__ == "__main__":
