@@ -1,5 +1,11 @@
 import asyncio
 import os
+from dotenv import load_dotenv  # ✅ додаємо
+
+# Завантажуємо змінні середовища з .env
+load_dotenv()
+
+# Перевіряємо, чи підвантажились токени
 print("BOT_TOKEN:", os.getenv("BOT_TOKEN"))
 print("CHAT_ID:", os.getenv("CHAT_ID"))
 
