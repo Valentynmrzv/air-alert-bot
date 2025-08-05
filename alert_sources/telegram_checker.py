@@ -3,6 +3,7 @@ import json
 import asyncio
 from telethon import TelegramClient, events
 from dotenv import load_dotenv
+from alert_sources.classifier import classify_message
 
 load_dotenv()
 
@@ -13,19 +14,8 @@ client = TelegramClient('session', api_id, api_hash)
 message_queue = asyncio.Queue()
 
 # Завантажити список каналів
-with open("alert_sources/channels.json", "r") as f:
+with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
     monitored_channels = set(json.load(f))
-
-# --- Визначення типу загрози ---
-def detect_threat(text):
-    lower = text.lower()
-    if "шахед" in lower:
-        return "Шахеди"
-    elif "ракета" in lower:
-        return "Ракети"
-    elif "баліст" in lower:
-        return "Балістика"
-    return None
 
 # --- Обробка нових повідомлень ---
 @client.on(events.NewMessage())
@@ -33,15 +23,12 @@ async def handler(event):
     sender = await event.get_sender()
     if hasattr(sender, 'username') and sender.username in monitored_channels:
         text = event.raw_text
-        threat_type = detect_threat(text)
+        url = f"https://t.me/{sender.username}/{event.id}"
+        classified = classify_message(text, url)
 
-        await message_queue.put({
-            "text": text,
-            "id": event.id,
-            "url": f"https://t.me/{sender.username}/{event.id}",
-            "threat_type": threat_type,
-            "district": "Броварський район"  # можеш змінити логіку, якщо треба
-        })
+        if classified:
+            classified["id"] = event.id
+            await message_queue.put(classified)
 
 # --- Ініціалізація Telethon ---
 async def start_monitoring():

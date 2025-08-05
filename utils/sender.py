@@ -4,7 +4,7 @@ from datetime import datetime
 
 _last_uptime_text = None  # глобальна змінна
 
-async def send_alert_message(text):
+async def send_alert_message(text, silent=False):
     bot_token = os.getenv("BOT_TOKEN")
     channel_id = os.getenv("CHANNEL_ID")
 
@@ -12,7 +12,8 @@ async def send_alert_message(text):
     data = {
         "chat_id": channel_id,
         "text": text,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
+        "disable_notification": silent  # ← додано
     }
 
     try:
