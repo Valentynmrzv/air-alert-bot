@@ -5,7 +5,7 @@ from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from dotenv import load_dotenv
 from alert_sources.classifier import classify_message
-from datetime import datetime
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -56,21 +56,22 @@ async def fetch_last_messages(monitor_start_time: datetime):
     if not await client.is_user_authorized():
         print("❗ Не авторизовано для підвантаження останніх повідомлень.")
         return
+
+    # Переконуємось, що monitor_start_time є timezone-aware в UTC
+    if monitor_start_time.tzinfo is None:
+        monitor_start_time = monitor_start_time.replace(tzinfo=timezone.utc)
+
     print(f"🔄 Підвантаження останніх повідомлень з каналів, починаючи з {monitor_start_time.isoformat()}")
 
     for username in monitored_channels:
         try:
             entity = await client.get_entity(username)
             messages = await client.get_messages(entity, limit=50)
-            # Ідемо від старих до нових
-            for msg in reversed(messages):
+            for msg in reversed(messages):  # Від старих до нових
                 if msg.date >= monitor_start_time:
                     classified = classify_message(msg.text, f"https://t.me/{username}/{msg.id}")
                     if classified:
                         classified["id"] = msg.id
                         await message_queue.put(classified)
-                else:
-                    # Якщо повідомлення ще старше, пропускаємо
-                    pass
         except Exception as e:
             print(f"❌ Помилка підвантаження повідомлень з каналу {username}: {e}")
