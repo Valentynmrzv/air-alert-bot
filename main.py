@@ -58,21 +58,33 @@ async def main():
     user_chat_id = os.getenv("USER_CHAT_ID")
 
     state = load_state()
-    # Ініціалізація статусного message_id
-    if "status_message_id" not in state or state["status_message_id"] is None:
-        message_id = await send_start_message(start_time, user_chat_id)
-        if message_id is None:
+
+    # Надсилаємо стартове повідомлення з датою і часом запуску (не оновлюємо)
+    if "start_message_id" not in state or state["start_message_id"] is None:
+        start_message_id = await send_start_message(start_time, user_chat_id)
+        if start_message_id is None:
             print("❌ Не вдалося відправити стартове повідомлення, завершуємо.")
             return
-        state["status_message_id"] = message_id
+        state["start_message_id"] = start_message_id
         save_state(state)
     else:
-        message_id = state["status_message_id"]
+        start_message_id = state["start_message_id"]
+
+    # Окреме повідомлення для оновлення таймера (створюємо або отримуємо)
+    if "timer_message_id" not in state or state["timer_message_id"] is None:
+        timer_message_id = await send_alert_message("🕒 Таймер роботи бота: 0 год 0 хв", notify=False)
+        if timer_message_id is None:
+            print("❌ Не вдалося відправити таймер, завершуємо.")
+            return
+        state["timer_message_id"] = timer_message_id
+        save_state(state)
+    else:
+        timer_message_id = state["timer_message_id"]
 
     async def update_status():
         while True:
-            if message_id:
-                await edit_message(start_time, message_id, user_chat_id)
+            if timer_message_id:
+                await edit_message(start_time, timer_message_id, user_chat_id)
             await asyncio.sleep(1800)  # оновлення кожні 30 хвилин
 
     await asyncio.gather(
