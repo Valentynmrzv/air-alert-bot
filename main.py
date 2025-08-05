@@ -1,34 +1,53 @@
 import asyncio
 from dotenv import load_dotenv
-from alert_sources.news_checker import check_news_sources
+from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
 from utils.sender import send_alert_message
 from utils.state_manager import load_state, save_state
 
 load_dotenv()
 
-async def main():
+async def monitor_loop():
     state = load_state()
+    alert_active = False
+    threat_sent = set()
 
     while True:
-        print("🔄 Перевірка джерел...")
+        result = await check_telegram_channels()
 
-        news_result = await check_news_sources()
+        if result:
+            text = result['text']
+            link = result['url']
+            msg_id = result['id']
+            district = result.get('district', 'Броварський район')
+            threat = result.get('threat_type')
 
-        if news_result:
-            alert_text = news_result['text']
-            source_url = news_result['url']
-            district = news_result.get('district', 'невідомо')
-            threat_type = news_result.get('threat_type', 'невідомо')
-
-            alert_id = news_result['id']
-            if alert_id not in state['sent']:
-                state['sent'].append(alert_id)
+            if "тривога" in text.lower() and msg_id not in state['sent']:
+                message = f"🚨 *Повітряна тривога!*\n📍 {district}"
+                await send_alert_message(message)
+                state['sent'].append(msg_id)
+                alert_active = True
                 save_state(state)
 
-                message = f"🚨 *Повітряна тривога*\n📍 {district}\n🔻 Загроза: {threat_type}\n[Джерело]({source_url})"
+            elif threat and msg_id not in threat_sent:
+                message = f"🔻 *Тип загрози:* {threat}\n📍 {district}\n[Джерело]({link})"
                 await send_alert_message(message)
+                threat_sent.add(msg_id)
 
-        await asyncio.sleep(60)
+            elif "відбій" in text.lower() and msg_id not in state['sent']:
+                message = f"✅ *Відбій тривоги.*\n📍 {district}"
+                await send_alert_message(message)
+                state['sent'].append(msg_id)
+                alert_active = False
+                threat_sent.clear()
+                save_state(state)
+
+        await asyncio.sleep(2)
+
+async def main():
+    await asyncio.gather(
+        start_monitoring(),
+        monitor_loop()
+    )
 
 if __name__ == "__main__":
     try:
