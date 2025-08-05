@@ -1,3 +1,5 @@
+python-dotenv
+telethon
+playwright
 aiohttp
 beautifulsoup4
-python-dotenv
