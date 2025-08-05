@@ -43,3 +43,9 @@ async def start_monitoring():
         except FloodWaitError as e:
             print(f"Отримано FloodWaitError, чекаю {e.seconds} секунд...")
             await asyncio.sleep(e.seconds)
+
+async def check_telegram_channels():
+    try:
+        return message_queue.get_nowait()
+    except asyncio.QueueEmpty:
+        return None
