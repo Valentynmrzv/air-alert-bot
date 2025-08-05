@@ -46,7 +46,7 @@ async def monitor_loop(channel_id):
                 threat_sent.clear()
                 save_state(state)
 
-            elif alert_active and msg_id not in threat_sent:
+            elif msg_id not in threat_sent and alert_active:
                 try:
                     if threat:
                         message = f"🔻 *Тип загрози:* {threat}\n📍 {district}\n[Джерело]({link})"
@@ -111,7 +111,6 @@ async def main():
         monitor_loop(channel_id),
         update_status()
     )
-
 
 if __name__ == "__main__":
     try:
