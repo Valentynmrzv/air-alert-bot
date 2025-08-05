@@ -4,16 +4,16 @@ from datetime import datetime
 
 _last_uptime_text = None  # глобальна змінна
 
-async def send_alert_message(text, silent=False):
+async def send_alert_message(text, notify=True):
     bot_token = os.getenv("BOT_TOKEN")
     channel_id = os.getenv("CHANNEL_ID")
-
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
     data = {
         "chat_id": channel_id,
         "text": text,
         "parse_mode": "Markdown",
-        "disable_notification": silent  # ← додано
+        "disable_notification": not notify
     }
 
     try:
@@ -25,10 +25,9 @@ async def send_alert_message(text, silent=False):
     except Exception as e:
         print(f"❌ Виняток при надсиланні: {e}")
 
-async def send_start_message(start_time, chat_id) -> int:
+async def send_start_message(start_time, chat_id):
     bot_token = os.getenv("BOT_TOKEN")
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
     text = format_uptime_message(start_time)
     global _last_uptime_text
     _last_uptime_text = text
@@ -57,7 +56,7 @@ async def edit_message(start_time, message_id, chat_id):
     new_text = format_uptime_message(start_time)
 
     if new_text == _last_uptime_text:
-        return  # нічого не змінювати
+        return
 
     _last_uptime_text = new_text
 

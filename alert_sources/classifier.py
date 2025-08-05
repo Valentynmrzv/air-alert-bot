@@ -1,37 +1,36 @@
+import re
+
 def classify_message(text: str, source_url: str):
     lower = text.lower()
 
-    # Базовий об'єкт
     result = {
         "text": text,
         "url": source_url,
         "id": hash(text + source_url)
     }
 
-    # Географія
-    if any(word in lower for word in ["бровар", "бровари", "броварський"]):
+    # Географія: згадка про Бровари або Київську область
+    brovary_keywords = ["бровар", "бровари", "броварський"]
+    kyiv_keywords = ["київська область", "київщина", "міг", "ту", "київ"]
+
+    if any(re.search(rf"\b{word}\b", lower) for word in brovary_keywords):
         result["district"] = "Броварський район"
-    elif any(word in lower for word in ["київська область", "київщина"]):
+    elif any(re.search(rf"\b{word}\b", lower) for word in kyiv_keywords):
         result["district"] = "Київська область"
     else:
-        return None  # Не стосується нашого регіону
+        return None  # Ігноруємо повідомлення, не пов'язані з регіоном
 
-    # Типи повідомлень
-    if "тривога" in lower:
+    # Тип повідомлення: тривога або відбій
+    if re.search(r"\bтривога\b", lower):
+        return result
+    if re.search(r"\bвідбій\b", lower):
         return result
 
-    if "відбій" in lower:
-        return result
-
-    # Типи загроз (розширений список)
-    threats = [
-        "шахед", "ракета", "баліст", "іскандер", "кінджал",
-        "х-101", "х-55", "х-22", "х-32", "калібр", "онікс",
-        "ту", "ту-95", "ту-160", "міг", "міг-31", "миг", "mig"
-    ]
-    for threat in threats:
-        if threat in lower:
+    # Тип загрози
+    threat_keywords = ["шахед", "ракета", "балістика", "іскандер", "х-101", "х-55", "загроза", "ту", "міг"]
+    for threat in threat_keywords:
+        if re.search(rf"\b{threat}\b", lower):
             result["threat_type"] = threat
             return result
 
-    return None  # Якщо немає ключових даних
+    return result  # Якщо повідомлення з регіону, навіть без загрози — передаємо як новину під час тривоги
