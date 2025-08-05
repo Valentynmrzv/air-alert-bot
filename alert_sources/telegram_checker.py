@@ -9,7 +9,7 @@ from alert_sources.classifier import classify_message
 load_dotenv()
 
 api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH"))
+api_hash = os.getenv("API_HASH")
 phone = os.getenv("TELEGRAM_PHONE")
 
 client = TelegramClient('session', api_id, api_hash)
