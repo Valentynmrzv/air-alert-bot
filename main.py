@@ -9,7 +9,7 @@ import os
 
 load_dotenv()
 
-async def monitor_loop():
+async def monitor_loop(channel_id):
     state = load_state()
     alert_active = False
     threat_sent = set()
@@ -27,14 +27,14 @@ async def monitor_loop():
             if "тривога" in text.lower() and msg_id not in state['sent']:
                 message = f"🚨 *Повітряна тривога!*\n📍 {district}"
                 screenshot_path = await take_alert_screenshot()
-                await send_alert_with_screenshot(message, screenshot_path)
+                await send_alert_with_screenshot(message, screenshot_path, chat_id=channel_id)
                 state['sent'].append(msg_id)
                 alert_active = True
                 save_state(state)
 
             elif "відбій" in text.lower() and msg_id not in state['sent']:
                 message = f"✅ *Відбій тривоги.*\n📍 {district}"
-                await send_alert_message(message, notify=True)
+                await send_alert_message(message, notify=True, chat_id=channel_id)
                 state['sent'].append(msg_id)
                 alert_active = False
                 threat_sent.clear()
@@ -43,11 +43,11 @@ async def monitor_loop():
             elif alert_active and msg_id not in threat_sent:
                 if threat:
                     message = f"🔻 *Тип загрози:* {threat}\n📍 {district}\n[Джерело]({link})"
-                    await send_alert_message(message, notify=False)
+                    await send_alert_message(message, notify=False, chat_id=channel_id)
                     threat_sent.add(msg_id)
                 else:
                     message = f"ℹ️ {text}\n[Джерело]({link})"
-                    await send_alert_message(message, notify=False)
+                    await send_alert_message(message, notify=False, chat_id=channel_id)
                     threat_sent.add(msg_id)
 
         await asyncio.sleep(2)
@@ -56,10 +56,11 @@ async def monitor_loop():
 async def main():
     start_time = datetime.now()
     user_chat_id = os.getenv("USER_CHAT_ID")
+    channel_id = os.getenv("CHANNEL_ID")
 
     state = load_state()
 
-    # Надсилаємо стартове повідомлення з датою і часом запуску (не оновлюємо)
+    # Надсилаємо стартове повідомлення з датою і часом запуску в особистий чат
     if "start_message_id" not in state or state["start_message_id"] is None:
         start_message_id = await send_start_message(start_time, user_chat_id)
         if start_message_id is None:
@@ -70,9 +71,9 @@ async def main():
     else:
         start_message_id = state["start_message_id"]
 
-    # Окреме повідомлення для оновлення таймера (створюємо або отримуємо)
+    # Окреме повідомлення для оновлення таймера в особистому чаті (створюємо або отримуємо)
     if "timer_message_id" not in state or state["timer_message_id"] is None:
-        timer_message_id = await send_alert_message("🕒 Таймер роботи бота: 0 год 0 хв", notify=False)
+        timer_message_id = await send_alert_message("🕒 Таймер роботи бота: 0 год 0 хв", notify=False, chat_id=user_chat_id)
         if timer_message_id is None:
             print("❌ Не вдалося відправити таймер, завершуємо.")
             return
@@ -89,7 +90,7 @@ async def main():
 
     await asyncio.gather(
         start_monitoring(),
-        monitor_loop(),
+        monitor_loop(channel_id),
         update_status()
     )
 
