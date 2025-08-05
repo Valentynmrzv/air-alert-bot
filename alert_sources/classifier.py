@@ -1,4 +1,4 @@
-def classify\_message(text: str, source\_url: str):
+def classify_message(text: str, source_url: str):
 lower = text.lower()
 
 ```
