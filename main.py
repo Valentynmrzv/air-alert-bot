@@ -1,6 +1,6 @@
 import asyncio
 from dotenv import load_dotenv
-from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
+# from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
 from utils.sender import send_alert_message
 from utils.state_manager import load_state, save_state
 
