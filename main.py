@@ -2,8 +2,9 @@ import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
 from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
-from utils.sender import send_alert_message, send_start_message, edit_message
 from utils.state_manager import load_state, save_state
+from utils.screenshot import take_alert_screenshot
+from utils.sender import send_alert_message, send_start_message, edit_message, send_alert_with_screenshot
 import os
 
 load_dotenv()
@@ -25,10 +26,12 @@ async def monitor_loop():
 
             if "тривога" in text.lower() and msg_id not in state['sent']:
                 message = f"🚨 *Повітряна тривога!*\n📍 {district}"
-                await send_alert_message(message, notify=True)
+                screenshot_path = await take_alert_screenshot()
+                await send_alert_with_screenshot(message, screenshot_path)
                 state['sent'].append(msg_id)
                 alert_active = True
                 save_state(state)
+
 
             elif "відбій" in text.lower() and msg_id not in state['sent']:
                 message = f"✅ *Відбій тривоги.*\n📍 {district}"

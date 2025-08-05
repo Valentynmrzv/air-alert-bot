@@ -84,3 +84,26 @@ def format_uptime_message(start_time):
     hours = delta // 3600
     minutes = (delta % 3600) // 60
     return f"🟢 Бот працює без зупинок: {hours} год {minutes} хв\nСтежу за повітряними тривогами..."
+
+async def send_alert_with_screenshot(caption, screenshot_path):
+    bot_token = os.getenv("BOT_TOKEN")
+    channel_id = os.getenv("CHANNEL_ID")
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+
+    with open(screenshot_path, "rb") as image:
+        files = {"photo": image}
+        data = {
+            "chat_id": channel_id,
+            "caption": caption,
+            "parse_mode": "Markdown"
+        }
+
+        try:
+            response = requests.post(url, data=data, files=files, timeout=10)
+            if response.status_code != 200:
+                print(f"❌ Помилка надсилання фото: {response.text}")
+            else:
+                print("📸 Скріншот надіслано з повідомленням")
+        except Exception as e:
+            print(f"❌ Виняток при надсиланні скріншоту: {e}")
