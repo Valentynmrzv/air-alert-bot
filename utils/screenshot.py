@@ -1,18 +1,26 @@
 import os
-from playwright.async_api import async_playwright
+import subprocess
+from datetime import datetime
 
-async def take_alert_screenshot(path="map.png"):
+async def take_alert_screenshot():
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = f"screenshots/alert_{timestamp}.png"
     url = "https://alerts.in.ua/"
-    screenshot_path = os.path.join("temp", path)
 
-    os.makedirs("temp", exist_ok=True)
+    os.makedirs("screenshots", exist_ok=True)
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        page = await browser.new_page()
-        await page.goto(url)
-        await page.set_viewport_size({"width": 1280, "height": 720})
-        await page.screenshot(path=screenshot_path, full_page=True)
-        await browser.close()
+    command = [
+        "wkhtmltoimage",
+        "--width", "1024",
+        "--disable-smart-width",
+        url,
+        output_path
+    ]
 
-    return screenshot_path
+    try:
+        subprocess.run(command, check=True)
+        print(f"🖼 Скріншот збережено: {output_path}")
+        return output_path
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Помилка при створенні скріншота: {e}")
+        return None
