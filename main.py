@@ -32,7 +32,6 @@ async def monitor_loop():
                 alert_active = True
                 save_state(state)
 
-
             elif "відбій" in text.lower() and msg_id not in state['sent']:
                 message = f"✅ *Відбій тривоги.*\n📍 {district}"
                 await send_alert_message(message, notify=True)
@@ -53,22 +52,35 @@ async def monitor_loop():
 
         await asyncio.sleep(2)
 
+
 async def main():
     start_time = datetime.now()
     user_chat_id = os.getenv("USER_CHAT_ID")
-    message_id = await send_start_message(start_time, user_chat_id)
+
+    state = load_state()
+    # Ініціалізація статусного message_id
+    if "status_message_id" not in state or state["status_message_id"] is None:
+        message_id = await send_start_message(start_time, user_chat_id)
+        if message_id is None:
+            print("❌ Не вдалося відправити стартове повідомлення, завершуємо.")
+            return
+        state["status_message_id"] = message_id
+        save_state(state)
+    else:
+        message_id = state["status_message_id"]
 
     async def update_status():
         while True:
             if message_id:
                 await edit_message(start_time, message_id, user_chat_id)
-            await asyncio.sleep(3600)
+            await asyncio.sleep(1800)  # оновлення кожні 30 хвилин
 
     await asyncio.gather(
         start_monitoring(),
         monitor_loop(),
         update_status()
     )
+
 
 if __name__ == "__main__":
     try:
