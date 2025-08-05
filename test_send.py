@@ -1,5 +1,8 @@
 import asyncio
 import os
+print("BOT_TOKEN:", os.getenv("BOT_TOKEN"))
+print("CHAT_ID:", os.getenv("CHAT_ID"))
+
 from utils.sender import send_alert_with_screenshot, send_alert_message
 from utils.screenshot import take_alert_screenshot
 
