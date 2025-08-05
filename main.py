@@ -27,28 +27,36 @@ async def monitor_loop(channel_id):
             if "тривога" in text.lower() and msg_id not in state['sent']:
                 message = f"🚨 *Повітряна тривога!*\n📍 {district}"
                 screenshot_path = await take_alert_screenshot()
-                await send_alert_with_screenshot(message, screenshot_path, chat_id=channel_id)
+                try:
+                    await send_alert_with_screenshot(message, screenshot_path, chat_id=channel_id)
+                except Exception as e:
+                    print(f"❌ Помилка надсилання тривоги: {e}")
                 state['sent'].append(msg_id)
                 alert_active = True
                 save_state(state)
 
             elif "відбій" in text.lower() and msg_id not in state['sent']:
                 message = f"✅ *Відбій тривоги.*\n📍 {district}"
-                await send_alert_message(message, notify=True, chat_id=channel_id)
+                try:
+                    await send_alert_message(message, notify=True, chat_id=channel_id)
+                except Exception as e:
+                    print(f"❌ Помилка надсилання відбою: {e}")
                 state['sent'].append(msg_id)
                 alert_active = False
                 threat_sent.clear()
                 save_state(state)
 
             elif alert_active and msg_id not in threat_sent:
-                if threat:
-                    message = f"🔻 *Тип загрози:* {threat}\n📍 {district}\n[Джерело]({link})"
-                    await send_alert_message(message, notify=False, chat_id=channel_id)
+                try:
+                    if threat:
+                        message = f"🔻 *Тип загрози:* {threat}\n📍 {district}\n[Джерело]({link})"
+                        await send_alert_message(message, notify=False, chat_id=channel_id)
+                    else:
+                        message = f"ℹ️ {text}\n[Джерело]({link})"
+                        await send_alert_message(message, notify=False, chat_id=channel_id)
                     threat_sent.add(msg_id)
-                else:
-                    message = f"ℹ️ {text}\n[Джерело]({link})"
-                    await send_alert_message(message, notify=False, chat_id=channel_id)
-                    threat_sent.add(msg_id)
+                except Exception as e:
+                    print(f"❌ Помилка надсилання додаткової інформації: {e}")
 
         await asyncio.sleep(2)
 
@@ -60,7 +68,6 @@ async def main():
 
     state = load_state()
 
-    # Надсилаємо стартове повідомлення з датою і часом запуску (особистий чат)
     if "start_message_id" not in state or state["start_message_id"] is None:
         start_message_id = await send_start_message(start_time, user_chat_id)
         if start_message_id is None:
@@ -71,7 +78,6 @@ async def main():
     else:
         start_message_id = state["start_message_id"]
 
-    # Окреме повідомлення для оновлення таймера (особистий чат)
     if "timer_message_id" not in state or state["timer_message_id"] is None:
         timer_message_id = await send_alert_message("🕒 Таймер роботи бота: 0 год 0 хв", notify=False, chat_id=user_chat_id)
         if timer_message_id is None:
@@ -85,8 +91,11 @@ async def main():
     async def update_status():
         while True:
             if timer_message_id:
-                await edit_message(start_time, timer_message_id, user_chat_id)
-            await asyncio.sleep(1800)  # оновлення кожні 30 хвилин
+                try:
+                    await edit_message(start_time, timer_message_id, user_chat_id)
+                except Exception as e:
+                    print(f"❌ Помилка оновлення статусного повідомлення: {e}")
+            await asyncio.sleep(1800)
 
     await asyncio.gather(
         start_monitoring(),
