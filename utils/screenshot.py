@@ -1,10 +1,29 @@
 import os
+import time
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
+def clean_old_screenshots(folder="screenshots", days=1):
+    now = time.time()
+    cutoff = now - days * 86400  # секунд у 7 днях
+
+    if not os.path.exists(folder):
+        print(f"Папка {folder} не існує")
+        return
+
+    for filename in os.listdir(folder):
+        filepath = os.path.join(folder, filename)
+        if os.path.isfile(filepath):
+            file_mtime = os.path.getmtime(filepath)
+            if file_mtime < cutoff:
+                os.remove(filepath)
+                print(f"Видалено старий файл: {filepath}")
+
 async def take_alert_screenshot():
+    clean_old_screenshots()  # Видаляємо старі скріншоти перед новим
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = "screenshots"
     os.makedirs(output_dir, exist_ok=True)
@@ -24,14 +43,12 @@ async def take_alert_screenshot():
         driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.get(url)
 
-        # Очікуємо повне завантаження
         driver.implicitly_wait(10)
 
-        # Якщо хочеш - можна підкоригувати розмір сторінки, щоб не було дуже великого скріншоту
         total_width = driver.execute_script("return document.body.scrollWidth")
         total_height = driver.execute_script("return document.body.scrollHeight")
 
-        max_size = 900  # максимально 900 пікселів по ширині та висоті
+        max_size = 900  # максимум 900 пікселів по ширині та висоті
 
         width = min(total_width, max_size)
         height = min(total_height, max_size)
