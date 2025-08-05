@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from alert_sources.telegram_checker import check_telegram_channels, start_monitoring
 from utils.sender import send_alert_message, send_start_message, edit_message
 from utils.state_manager import load_state, save_state
+import os
 
 load_dotenv()
 
@@ -49,12 +50,13 @@ async def monitor_loop():
 
 async def main():
     start_time = datetime.now()
-    message_id = await send_start_message(start_time)
+    user_chat_id = os.getenv("USER_CHAT_ID")
+    message_id = await send_start_message(start_time, user_chat_id)
 
     async def update_status():
         while True:
             if message_id:
-                await edit_message(start_time, message_id)
+                await edit_message(start_time, message_id, user_chat_id)
             await asyncio.sleep(3600)  # оновлювати кожну годину
 
     await asyncio.gather(
