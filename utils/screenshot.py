@@ -4,20 +4,19 @@ from datetime import datetime
 
 async def take_alert_screenshot():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = f"screenshots/alert_{timestamp}.png"
-    url = "https://alerts.in.ua/"
-
-    os.makedirs("screenshots", exist_ok=True)
+    output_dir = "screenshots"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"alert_map_{timestamp}.png")
+    url = "https://map.ukrainealarm.com/"
 
     command = [
-    "wkhtmltoimage",
-    "--width", "1024",
-    "--height", "768",
-    "--custom-header", "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "--disable-smart-width",
-    url,
-    output_path
+        "wkhtmltoimage",
+        "--width", "1024",
+        "--height", "768",
+        url,
+        output_path
     ]
+
     try:
         subprocess.run(command, check=True)
         print(f"🖼 Скріншот збережено: {output_path}")
