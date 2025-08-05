@@ -83,7 +83,12 @@ def format_uptime_message(start_time):
     delta = int((datetime.now() - start_time).total_seconds())
     hours = delta // 3600
     minutes = (delta % 3600) // 60
-    return f"🟢 Бот працює без зупинок: {hours} год {minutes} хв\nСтежу за повітряними тривогами..."
+    start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    return (
+        f"🟢 Бот працює без зупинок: {hours} год {minutes} хв\n"
+        f"⏱ Запущено: {start_str}\n"
+        "Стежу за повітряними тривогами..."
+    )
 
 async def send_alert_with_screenshot(caption, screenshot_path):
     bot_token = os.getenv("BOT_TOKEN")
