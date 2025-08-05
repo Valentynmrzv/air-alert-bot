@@ -19,6 +19,8 @@ async def monitor_loop(channel_id):
 
         if result:
             text = result['text']
+            print(f"Отримано повідомлення: {text}")  # <-- Додаємо логування тексту
+
             link = result['url']
             msg_id = result['id']
             district = result.get('district', 'Броварський район')
