@@ -12,11 +12,12 @@ async def take_alert_screenshot():
     command = [
     "wkhtmltoimage",
     "--width", "1024",
-    "--height", "768",  # Фіксована висота
+    "--height", "768",
+    "--custom-header", "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     "--disable-smart-width",
     url,
     output_path
-    ] 
+    ]
     try:
         subprocess.run(command, check=True)
         print(f"🖼 Скріншот збережено: {output_path}")
