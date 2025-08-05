@@ -60,7 +60,7 @@ async def main():
 
     state = load_state()
 
-    # Надсилаємо стартове повідомлення з датою і часом запуску в особистий чат
+    # Надсилаємо стартове повідомлення з датою і часом запуску (особистий чат)
     if "start_message_id" not in state or state["start_message_id"] is None:
         start_message_id = await send_start_message(start_time, user_chat_id)
         if start_message_id is None:
@@ -71,7 +71,7 @@ async def main():
     else:
         start_message_id = state["start_message_id"]
 
-    # Окреме повідомлення для оновлення таймера в особистому чаті (створюємо або отримуємо)
+    # Окреме повідомлення для оновлення таймера (особистий чат)
     if "timer_message_id" not in state or state["timer_message_id"] is None:
         timer_message_id = await send_alert_message("🕒 Таймер роботи бота: 0 год 0 хв", notify=False, chat_id=user_chat_id)
         if timer_message_id is None:
