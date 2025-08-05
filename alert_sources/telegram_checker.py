@@ -33,13 +33,9 @@ async def handler(event):
 async def start_monitoring():
     await client.connect()
     if not await client.is_user_authorized():
-        await client.send_code_request(phone)
-        code = input("Enter the code you received via Telegram: ")
-        try:
-            await client.sign_in(phone, code)
-        except SessionPasswordNeededError:
-            password = input("Two-step verification enabled. Enter your password: ")
-            await client.sign_in(password=password)
+        # При запуску через systemd — просто повідомляємо, що не авторизовані
+        print("❗ Не авторизовано. Будь ласка, запустіть скрипт вручну для первинної авторизації.")
+        return
     print("🟢 Telethon запущено і слухає канали...")
     await client.run_until_disconnected()
 
