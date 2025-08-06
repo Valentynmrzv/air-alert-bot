@@ -90,7 +90,7 @@ def classify_message(text: str, source_url: str):
     # Глобальні загрози — тривога незалежно від району
     global_threats = ["міг", "авіація", "ракета", "іскандер", "балістика", "пуски", "зліт"]
     for threat in global_threats:
-        if re.search(rf"\b{threat}\b", lower):
+        if threat in lower:
             return {
                 "district": None,
                 "text": text,
@@ -99,6 +99,7 @@ def classify_message(text: str, source_url: str):
                 "type": "alarm",
                 "threat_type": threat
             }
+
 
     # Локальні загрози + район — тривога
     local_threats = [
