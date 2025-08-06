@@ -67,6 +67,7 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 await send_alert_with_screenshot(alert_text, screenshot_path, chat_id=channel_id)
             else:
                 # Сповіщення зі звуком
+                print(f"Sending alert to channel {channel_id}: {alert_text}")
                 await send_alert_message(alert_text, chat_id=channel_id)
 
         elif msg["type"] == "all_clear" and alert_active:
@@ -75,7 +76,9 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
             state["threat_sent"] = list(threat_sent)
             save_state(state)
             # Сповіщення зі звуком
-            await send_alert_message(f"✅ Відбій тривоги у {district.title()}!", chat_id=channel_id)
+            alert_text = f"✅ Відбій тривоги у {district.title()}!"
+            print(f"Sending alert to channel {channel_id}: {alert_text}")
+            await send_alert_message(alert_text, chat_id=channel_id)
 
         elif msg["type"] == "info" and alert_active and msg_id not in threat_sent:
             # Сповіщення без звуку
