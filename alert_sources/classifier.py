@@ -57,6 +57,7 @@ def classify_message(text: str, source_url: str):
 
     lower = text.lower()
 
+    # Ключові слова для районів
     brovary_keywords = ["бровар", "бровари", "броварський"]
     kyiv_keywords = ["київська область", "київщина", "київ"]
 
@@ -66,29 +67,71 @@ def classify_message(text: str, source_url: str):
     elif any(re.search(rf"\b{word}\b", lower) for word in kyiv_keywords):
         district = "Київська область"
 
-    if not district:
-        return None
+    # Відбій тривоги
+    if "відбій тривоги" in lower:
+        return {
+            "district": district,
+            "text": text,
+            "url": source_url,
+            "id": hash(text + source_url),
+            "type": "all_clear"
+        }
 
-    result = {
-        "district": district,
-        "text": text,
-        "url": source_url,
-        "id": hash(text + source_url)
-    }
+    # Повітряна тривога (фраза)
+    if "повітряна тривога" in lower:
+        return {
+            "district": district,
+            "text": text,
+            "url": source_url,
+            "id": hash(text + source_url),
+            "type": "alarm"
+        }
 
-    # Визначаємо тип повідомлення
-    if "повітряна тривога" in lower or "тривога" in lower:
-        result["type"] = "alarm"
-    elif "відбій" in lower:
-        result["type"] = "all_clear"
-    else:
-        result["type"] = "info"
+    # Глобальні загрози — тривога незалежно від району
+    global_threats = ["міг", "авіація", "ракета", "іскандер", "балістика", "пуски", "зліт"]
+    for threat in global_threats:
+        if re.search(rf"\b{threat}\b", lower):
+            return {
+                "district": None,
+                "text": text,
+                "url": source_url,
+                "id": hash(text + source_url),
+                "type": "alarm",
+                "threat_type": threat
+            }
 
-    # Перевірка на тип загрози
-    threat_keywords = ["шахед", "ракета", "балістика", "іскандер", "х-101", "х-55"]
-    for threat in threat_keywords:
-        if threat in lower:
-            result["threat_type"] = threat
-            break
+    # Локальні загрози + район — тривога
+    local_threats = [
+        "шахед", "вибух", "вибухівка", "детонація", "детонації", "бомба", "бомбовий",
+        "бомбардування", "розрив", "пошкодження", "руйнування", "удар", "вибуховий пристрій",
+        "підрив", "підриви", "страйк", "снаряд", "артилерія", "міномет", "мінування",
+        "мінометний", "обстріл", "знищення", "пожежа", "пожежі",
+        "ппо", "зеніт", "зенітки", "протиповітряна оборона", "протиповітряна оборона"
+    ]
+    for threat in local_threats:
+        if re.search(rf"\b{threat}\b", lower):
+            if district:
+                return {
+                    "district": district,
+                    "text": text,
+                    "url": source_url,
+                    "id": hash(text + source_url),
+                    "type": "alarm",
+                    "threat_type": threat
+                }
+            else:
+                # Якщо локальна загроза, але район не знайдено — не класифікуємо
+                return None
 
-    return result
+    # Якщо є район, але немає тривог — інформаційне
+    if district:
+        return {
+            "district": district,
+            "text": text,
+            "url": source_url,
+            "id": hash(text + source_url),
+            "type": "info"
+        }
+
+    # Якщо нічого не релевантного
+    return None
