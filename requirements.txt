@@ -1,4 +1,5 @@
 python-dotenv
 telethon
 aiohttp
-beautifulsoup4
+selenium
+webdriver-manager

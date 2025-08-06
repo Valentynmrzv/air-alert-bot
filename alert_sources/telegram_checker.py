@@ -1,77 +1,73 @@
 import os
-import json
 import asyncio
+from datetime import datetime, timedelta, timezone
 from telethon import TelegramClient, events
-from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from dotenv import load_dotenv
-from alert_sources.classifier import classify_message
-from datetime import datetime, timezone
+from alert_sources.filter import classify_message, classify_alert_message
+import json
 
 load_dotenv()
 
-api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH")
-phone = os.getenv("TELEGRAM_PHONE")
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+client = TelegramClient("anon", API_ID, API_HASH)
 
-client = TelegramClient('session', api_id, api_hash)
 message_queue = asyncio.Queue()
+catch_up_messages = [] # Додаємо тимчасовий список для повідомлень під час "наздоганяючого" режиму
 
-with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
-    monitored_channels = set(json.load(f))
+with open("channels.json", "r", encoding="utf-8") as f:
+    monitored_channels = json.load(f)["channels"]
 
-@client.on(events.NewMessage())
-async def handler(event):
-    sender = await event.get_sender()
-    if hasattr(sender, 'username') and sender.username in monitored_channels:
-        text = event.raw_text
-        url = f"https://t.me/{sender.username}/{event.id}"
-        classified = classify_message(text, url)
+@client.on(events.NewMessage(chats=[c for c in monitored_channels if c != "air_alert_ua"]))
+async def handle_news(event):
+    classified = classify_message(event.message.text, f"https://t.me/{event.chat.username}/{event.message.id}")
+    if classified:
+        classified["date"] = event.message.date.replace(tzinfo=timezone.utc)
+        await message_queue.put(classified)
 
-        if classified:
-            classified["id"] = event.id
-            await message_queue.put(classified)
+@client.on(events.NewMessage(chats="air_alert_ua"))
+async def handle_alert(event):
+    classified = classify_alert_message(event.message.text, f"https://t.me/air_alert_ua/{event.message.id}")
+    if classified:
+        classified["date"] = event.message.date.replace(tzinfo=timezone.utc)
+        await message_queue.put(classified)
 
 async def start_monitoring():
-    await client.connect()
-    if not await client.is_user_authorized():
-        print("❗ Не авторизовано. Будь ласка, запустіть скрипт вручну для первинної авторизації.")
-        return
-    print("🟢 Telethon запущено і слухає канали...")
-
-    while True:
-        try:
-            await client.run_until_disconnected()
-        except FloodWaitError as e:
-            print(f"Отримано FloodWaitError, чекаю {e.seconds} секунд...")
-            await asyncio.sleep(e.seconds)
+    await client.start()
+    await client.run_until_disconnected()
 
 async def check_telegram_channels():
-    try:
-        return message_queue.get_nowait()
-    except asyncio.QueueEmpty:
-        return None
+    if not message_queue.empty():
+        return await message_queue.get()
+    return None
 
-async def fetch_last_messages(monitor_start_time: datetime):
-    """Підвантажує останні повідомлення з каналів, які не старші за monitor_start_time"""
+async def fetch_last_messages(minutes: int):
     if not await client.is_user_authorized():
-        print("❗ Не авторизовано для підвантаження останніх повідомлень.")
+        print("❗ Не авторизовано для підвантаження повідомлень.")
         return
 
-    # Переконуємось, що monitor_start_time є timezone-aware в UTC
-    if monitor_start_time.tzinfo is None:
-        monitor_start_time = monitor_start_time.replace(tzinfo=timezone.utc)
+    monitor_start_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
 
-    print(f"🔄 Підвантаження останніх повідомлень з каналів, починаючи з {monitor_start_time.isoformat()}")
+    print(f"🔄 Підвантаження повідомлень з {monitor_start_time.isoformat()}")
 
     for username in monitored_channels:
         try:
             entity = await client.get_entity(username)
-            messages = await client.get_messages(entity, limit=50)
-            for msg in reversed(messages):  # Від старих до нових
-                if msg.date >= monitor_start_time:
-                    classified = classify_message(msg.text, f"https://t.me/{username}/{msg.id}")
-                    if classified:
-                        classified["id"] = msg.id
-                        await message_queue.put(classified)
+            messages = await client.get_messages(entity, limit=200) 
+            for msg in reversed(messages):
+                if msg.date.replace(tzinfo=timezone.utc) >= monitor_start_time:
+                    if username == "air_alert_ua":
+                        classified = classify_alert_message(msg.text, f"https://t.me/{username}/{msg.id}")
+                        if classified:
+                            classified["date"] = msg.date.replace(tzinfo=timezone.utc)
+                            catch_up_messages.append(classified)
+                    else:
+                        classified = classify_message(msg.text, f"https://t.me/{username}/{msg.id}")
+                        if classified:
+                            classified["date"] = msg.date.replace(tzinfo=timezone.utc)
+                            catch_up_messages.append(classified)
         except Exception as e:
-            print(f"❌ Помилка підвантаження повідомлень з каналу {username}: {e}")
+            print(f"❌ Помилка підвантаження повідомлень з {username}: {e}")
+
+async def get_catch_up_messages():
+    return catch_up_messages

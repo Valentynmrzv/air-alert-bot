@@ -1,14 +1,15 @@
 import os
-import requests
+import aiohttp # Змінено
 from datetime import datetime
+from dotenv import load_dotenv
 
-_last_uptime_text = None  # глобальна змінна
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
 async def send_alert_message(text, notify=True, chat_id=None):
-    bot_token = os.getenv("BOT_TOKEN")
-    # Якщо chat_id не передано, беремо із змінної оточення CHANNEL_ID
-    target_chat_id = chat_id or os.getenv("CHANNEL_ID")
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    target_chat_id = chat_id or CHANNEL_ID
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
     data = {
         "chat_id": target_chat_id,
@@ -18,68 +19,54 @@ async def send_alert_message(text, notify=True, chat_id=None):
     }
 
     try:
-        response = requests.post(url, data=data, timeout=10)
-        if response.status_code != 200:
-            print(f"❌ Помилка надсилання: {response.text}")
-            return None
-        else:
-            print(f"✅ Повідомлення надіслано")
-            return response.json()["result"]["message_id"]
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=data, timeout=10) as response:
+                if response.status != 200:
+                    print(f"❌ Помилка надсилання повідомлення: {await response.text()}")
+                    return None
+                else:
+                    response_json = await response.json()
+                    print(f"✅ Повідомлення надіслано")
+                    return response_json["result"]["message_id"]
     except Exception as e:
-        print(f"❌ Виняток при надсиланні: {e}")
+        print(f"❌ Виняток при надсиланні повідомлення: {e}")
         return None
 
 async def send_start_message(start_time, chat_id):
-    bot_token = os.getenv("BOT_TOKEN")
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     text = format_uptime_message(start_time)
-    global _last_uptime_text
-    _last_uptime_text = text
-
     data = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
+        "disable_notification": True
     }
-
     try:
-        response = requests.post(url, data=data, timeout=10)
-        if response.status_code == 200:
-            message_id = response.json()["result"]["message_id"]
-            print(f"✅ Бот запущено, message_id: {message_id}")
-            return message_id
-        else:
-            print(f"❌ Помилка стартового повідомлення: {response.text}")
-            return None
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=data, timeout=10) as response:
+                if response.status != 200:
+                    print(f"❌ Помилка надсилання стартового повідомлення: {await response.text()}")
+                    return None
+                else:
+                    return (await response.json())["result"]["message_id"]
     except Exception as e:
         print(f"❌ Виняток при надсиланні стартового повідомлення: {e}")
         return None
 
-async def edit_message(start_time, message_id, chat_id):
-    global _last_uptime_text
-    new_text = format_uptime_message(start_time)
-
-    if new_text == _last_uptime_text:
-        return
-
-    _last_uptime_text = new_text
-
-    bot_token = os.getenv("BOT_TOKEN")
-    url = f"https://api.telegram.org/bot{bot_token}/editMessageText"
-
+async def edit_message(message_id, start_time, chat_id):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
+    text = format_uptime_message(start_time)
     data = {
         "chat_id": chat_id,
         "message_id": message_id,
-        "text": new_text,
-        "parse_mode": "Markdown"
+        "text": text,
+        "parse_mode": "Markdown",
     }
-
     try:
-        response = requests.post(url, data=data, timeout=10)
-        if response.status_code != 200:
-            print(f"❌ Помилка оновлення повідомлення: {response.text}")
-        else:
-            print("ℹ️ Повідомлення оновлено")
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=data, timeout=10) as response:
+                if response.status != 200:
+                    print(f"❌ Помилка оновлення повідомлення: {await response.text()}")
     except Exception as e:
         print(f"❌ Виняток при оновленні повідомлення: {e}")
 
@@ -95,24 +82,22 @@ def format_uptime_message(start_time):
     )
 
 async def send_alert_with_screenshot(caption, screenshot_path, chat_id=None):
-    bot_token = os.getenv("BOT_TOKEN")
-    target_chat_id = chat_id or os.getenv("CHANNEL_ID")
+    target_chat_id = chat_id or CHANNEL_ID
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
 
-    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    try:
+        async with aiohttp.ClientSession() as session:
+            with open(screenshot_path, "rb") as image:
+                data = aiohttp.FormData()
+                data.add_field('chat_id', str(target_chat_id))
+                data.add_field('caption', caption)
+                data.add_field('photo', image)
+                data.add_field('parse_mode', 'Markdown')
 
-    with open(screenshot_path, "rb") as image:
-        files = {"photo": image}
-        data = {
-            "chat_id": target_chat_id,
-            "caption": caption,
-            "parse_mode": "Markdown"
-        }
-
-        try:
-            response = requests.post(url, data=data, files=files, timeout=10)
-            if response.status_code != 200:
-                print(f"❌ Помилка надсилання фото: {response.text}")
-            else:
-                print("📸 Скріншот надіслано з повідомленням")
-        except Exception as e:
-            print(f"❌ Виняток при надсиланні скріншоту: {e}")
+                async with session.post(url, data=data, timeout=20) as response:
+                    if response.status != 200:
+                        print(f"❌ Помилка надсилання скріншота: {await response.text()}")
+                    else:
+                        print(f"✅ Скріншот успішно надіслано")
+    except Exception as e:
+        print(f"❌ Виняток при надсиланні скріншота: {e}")

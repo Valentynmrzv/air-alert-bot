@@ -1,31 +1,76 @@
-def classify_message(text: str, source_url: str):
+import re
+
+def classify_message(text: str, url: str):
+    """
+    Класифікує повідомлення за типом (тривога, відбій, загроза, новина),
+    визначає район (district) та тип загрози (threat_type).
+
+    Повертає словник з ключами:
+    - district
+    - type ("alarm", "all_clear", "info")
+    - threat_type (опціонально)
+    - text
+    - url
+    - id (хеш)
+
+    Якщо повідомлення не релевантне — повертає None.
+    """
+    if not text:
+        return None
+
     lower = text.lower()
 
-    # Базовий об'єкт
+    # Визначення району
+    # Ключові слова для Броварів
+    brovary_keywords = ["бровар", "бровари", "броварський"]
+    # Ключові слова для Києва та Київської області
+    kyiv_keywords = ["київська область", "київщина", "київ", "києв", "киев", "киевская область"]
+
+    district = None
+    if any(word in lower for word in brovary_keywords):
+        district = "Броварський район"
+    elif any(word in lower for word in kyiv_keywords):
+        district = "Київська область"
+    else:
+        return None  # Не наш регіон
+
     result = {
+        "district": district,
         "text": text,
-        "url": source_url,
-        "id": hash(text + source_url)
+        "url": url,
+        "id": hash(text + url)
     }
 
-    # Географія
-    if "бровар" in lower:
-        result["district"] = "Броварський район"
-    elif "київська область" in lower or "київщина" in lower:
-        result["district"] = "Київська область"
+    # Визначення типу повідомлення
+    if "повітряна тривога" in lower or "тривога" in lower or "тревога" in lower:
+        result["type"] = "alarm"
+    elif "відбій" in lower or "отбой" in lower:
+        result["type"] = "all_clear"
     else:
-        return None  # Не стосується нашого регіону
+        result["type"] = "info"
 
-    # Типи повідомлень
-    if "тривога" in lower:
-        return result
+    # Розширений список загроз
+    threat_keywords = [
+        # Українські терміни
+        "шахед", "ракета", "балістика", "іскандер", "кинджал", "калібр",
+        "х-101", "х-55", "оникс", "дрон", "атака", "збиття", "влучання",
+        "ракетний удар", "авіація", "винищувач", "бомбардування",
+        "повітряна атака", "протиповітряна оборона", "повітряний удар",
+        "пуск ракети", "пуски ракет", "повітряне попередження",
+        "повітряна загроза", "попередження тривоги",
+        # Кацапські терміни
+        "шахед", "мопед", "ракета", "баллистика", "искандер", "кинжал", "калибр",
+        "х-101", "х-55", "оникс", "дрон", "атака", "сбитие", "попадание",
+        "ракетный удар", "авиация", "истребитель", "бомбардировка",
+        "воздушная атака", "противовоздушная оборона", "воздушный удар",
+        "пуск ракеты", "пуски ракет", "воздушное предупреждение",
+        "воздушная угроза", "предупреждение тревоги", "ту 95",
+        "зліт", "взлет"
+    ]
 
-    if "відбій" in lower:
-        return result
-
-    for threat in ["шахед", "ракета", "балістика", "іскандер", "х-101", "х-55"]:
+    for threat in threat_keywords:
         if threat in lower:
             result["threat_type"] = threat
-            return result
+            break
 
-    return None  # Якщо немає ключових даних
+    return result
