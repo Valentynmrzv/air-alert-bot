@@ -3,9 +3,11 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from telethon import TelegramClient, events
 from dotenv import load_dotenv
-# Виправлено: шлях до файлу filter.py та назви функцій
 from utils.filter import classify_message
 import json
+
+# Імпорт стану вебсервера для логів і повідомлень
+from web import server
 
 load_dotenv()
 
@@ -24,9 +26,24 @@ async def handle_all_messages(event):
     username = getattr(event.chat, 'username', None)
     if not username:
         return  # Ігноруємо повідомлення без username
-    classified = classify_message(event.message.text, f"https://t.me/{username}/{event.message.id}")
-    
-    print(f"Received message from @{username}: {event.message.text}")
+
+    text = event.message.text or ""
+    url = f"https://t.me/{username}/{event.message.id}"
+
+    # Додаємо в останні повідомлення вебсерверу (для відображення в UI)
+    server.status["last_messages"].append({
+        "text": text,
+        "username": username,
+        "url": url,
+        "date": event.message.date.isoformat(),
+    })
+    # Тримаймо в межах 100 останніх повідомлень
+    if len(server.status["last_messages"]) > 100:
+        server.status["last_messages"] = server.status["last_messages"][-100:]
+
+    classified = classify_message(text, url)
+
+    print(f"Received message from @{username}: {text}")
     print(f"Classified as: {classified}")
 
     if classified:
