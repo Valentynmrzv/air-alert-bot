@@ -9,7 +9,7 @@ from utils.state_manager import load_state, save_state
 
 load_dotenv()
 
-async def monitor_loop(channel_id, user_chat_id, start_time):
+async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime):
     state = load_state()
     alert_active = state.get("alert_active", False)
     threat_sent = set(state.get("threat_sent", []))
@@ -22,16 +22,16 @@ async def monitor_loop(channel_id, user_chat_id, start_time):
         district = msg.get("district", "").lower()
         text = msg.get("text", "")
         msg_id = msg.get("id")
-        
+
         if msg["type"] == "alarm" and not alert_active:
             alert_active = True
             threat_sent.clear()
             print(f"   [CATCH-UP] Активна тривога у {district.title()}.")
-        
+
         elif msg["type"] == "all_clear" and alert_active:
             alert_active = False
             print(f"   [CATCH-UP] Відбій тривоги у {district.title()}.")
-        
+
         elif msg["type"] == "info" and alert_active and msg_id not in threat_sent:
             threat_sent.add(msg_id)
             print(f"   [CATCH-UP] Новина під час тривоги: {text[:50]}...")
@@ -81,7 +81,7 @@ async def monitor_loop(channel_id, user_chat_id, start_time):
             state["threat_sent"] = list(threat_sent)
             save_state(state)
 
-async def uptime_loop(user_chat_id, start_time):
+async def uptime_loop(user_chat_id: int, start_time: datetime):
     state = load_state()
     start_message_id = state.get("start_message_id")
     timer_message_id = state.get("timer_message_id")
@@ -103,22 +103,26 @@ async def uptime_loop(user_chat_id, start_time):
         await edit_message(timer_message_id, start_time, user_chat_id)
 
 async def main():
-    # Спочатку стартуємо клієнта, щоб він підключився
-    await tg_checker.client.start()  # або await tg_checker.client.connect()
+    channel_id = int(os.getenv("CHANNEL_ID"))
+    user_chat_id = int(os.getenv("USER_CHAT_ID"))
+    start_time = datetime.now()
 
-    # Тепер перевіряємо авторизацію
+    # Підключаємо клієнта без запиту телефону (бо сесія збережена)
+    await tg_checker.client.connect()
+
     if not await tg_checker.client.is_user_authorized():
-        print("❗ Не авторизовано. Будь ласка, запустіть authorize.py для первинної авторизації.")
+        print("❗ Не авторизовано. Запусти authorize.py для первинної авторизації.")
         return
 
-    # Далі логіка програми
+    # Підвантажуємо останні повідомлення для "наздоганяючого" старту
     await tg_checker.fetch_last_messages(60)
+
+    # Запускаємо асинхронно всі цикли
     await asyncio.gather(
         tg_checker.start_monitoring(),
         monitor_loop(channel_id, user_chat_id, start_time),
         uptime_loop(user_chat_id, start_time)
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
