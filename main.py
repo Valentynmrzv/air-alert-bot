@@ -97,7 +97,7 @@ async def uptime_loop(user_chat_id: int, start_time: datetime):
         save_state(state)
 
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(300)
         await edit_message(timer_message_id, start_time, user_chat_id)
 
 
