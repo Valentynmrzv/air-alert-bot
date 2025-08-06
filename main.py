@@ -6,7 +6,7 @@ import alert_sources.telegram_checker as tg_checker
 from utils.sender import send_alert_message, send_alert_with_screenshot, send_start_message, edit_message
 from utils.screenshot import take_alert_screenshot
 from utils.state_manager import load_state, save_state
-import server  # Імпорт вебсервера з server.py
+from web import server  # Імпорт вебсервера з server.py
 
 load_dotenv()
 
