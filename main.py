@@ -108,7 +108,7 @@ async def main():
     start_time = datetime.now()
 
     # Підключаємо клієнта без запиту телефону (бо сесія збережена)
-    await tg_checker.client.connect()
+    await tg_checker.client.start()
 
     if not await tg_checker.client.is_user_authorized():
         print("❗ Не авторизовано. Запусти authorize.py для первинної авторизації.")
