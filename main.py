@@ -103,21 +103,22 @@ async def uptime_loop(user_chat_id, start_time):
         await edit_message(timer_message_id, start_time, user_chat_id)
 
 async def main():
-    channel_id = int(os.getenv("CHANNEL_ID"))
-    user_chat_id = int(os.getenv("USER_CHAT_ID"))
-    start_time = datetime.now()
+    # Спочатку стартуємо клієнта, щоб він підключився
+    await tg_checker.client.start()  # або await tg_checker.client.connect()
 
+    # Тепер перевіряємо авторизацію
     if not await tg_checker.client.is_user_authorized():
-        print("❗ Не авторизовано. Запусти authorize.py для авторизації.")
+        print("❗ Не авторизовано. Будь ласка, запустіть authorize.py для первинної авторизації.")
         return
 
+    # Далі логіка програми
     await tg_checker.fetch_last_messages(60)
-
     await asyncio.gather(
         tg_checker.start_monitoring(),
         monitor_loop(channel_id, user_chat_id, start_time),
         uptime_loop(user_chat_id, start_time)
     )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
