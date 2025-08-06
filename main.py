@@ -83,24 +83,23 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
 
 async def uptime_loop(user_chat_id: int, start_time: datetime):
     state = load_state()
-    start_message_id = state.get("start_message_id")
-    timer_message_id = state.get("timer_message_id")
+    
+    # При кожному запуску створюємо нове стартове повідомлення
+    start_message_id = await send_start_message(start_time, user_chat_id)
+    if start_message_id:
+        state["start_message_id"] = start_message_id
+        save_state(state)
 
-    if start_message_id is None:
-        start_message_id = await send_start_message(start_time, user_chat_id)
-        if start_message_id:
-            state["start_message_id"] = start_message_id
-            save_state(state)
-    
-    if timer_message_id is None:
-        timer_message_id = await send_alert_message("🕒 Таймер роботи бота: 0 год 0 хв", notify=False, chat_id=user_chat_id)
-        if timer_message_id:
-            state["timer_message_id"] = timer_message_id
-            save_state(state)
-    
+    # При кожному запуску створюємо нове повідомлення з таймером
+    timer_message_id = await send_alert_message("🕒 Таймер роботи бота: 0 год 0 хв", notify=False, chat_id=user_chat_id)
+    if timer_message_id:
+        state["timer_message_id"] = timer_message_id
+        save_state(state)
+
     while True:
         await asyncio.sleep(60)
         await edit_message(timer_message_id, start_time, user_chat_id)
+
 
 async def main():
     channel_id = int(os.getenv("CHANNEL_ID"))
