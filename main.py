@@ -66,6 +66,7 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
             if screenshot_path:
                 await send_alert_with_screenshot(alert_text, screenshot_path, chat_id=channel_id)
             else:
+                # Сповіщення зі звуком
                 await send_alert_message(alert_text, chat_id=channel_id)
 
         elif msg["type"] == "all_clear" and alert_active:
@@ -73,9 +74,11 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
             state["alert_active"] = alert_active
             state["threat_sent"] = list(threat_sent)
             save_state(state)
+            # Сповіщення зі звуком
             await send_alert_message(f"✅ Відбій тривоги у {district.title()}!", chat_id=channel_id)
 
         elif msg["type"] == "info" and alert_active and msg_id not in threat_sent:
+            # Сповіщення без звуку
             await send_alert_message(f"⚠️ {text}", notify=False, chat_id=channel_id)
             threat_sent.add(msg_id)
             state["threat_sent"] = list(threat_sent)
@@ -97,9 +100,8 @@ async def uptime_loop(user_chat_id: int, start_time: datetime):
         save_state(state)
 
     while True:
-        await asyncio.sleep(300)
+        await asyncio.sleep(300)  # оновлюємо кожні 5 хвилин
         await edit_message(timer_message_id, start_time, user_chat_id)
-
 
 async def main():
     channel_id = int(os.getenv("CHANNEL_ID"))
