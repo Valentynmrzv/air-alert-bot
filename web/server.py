@@ -10,7 +10,6 @@ status = {
 }
 
 async def index(request):
-    # Проста сторінка з базовою розміткою
     html = f"""
     <!DOCTYPE html>
     <html lang="uk">
@@ -42,7 +41,7 @@ async def index(request):
             <aside>
                 <h2>Останні повідомлення</h2>
                 <div id="messages">
-                    {"".join([f'<div class="message">{m["text"][:100]}</div>' for m in reversed(status['last_messages'][-30:])])}
+                    {"".join([f'<div class="message"><a href="{m["url"]}" target="_blank">{m["text"][:100]}</a></div>' for m in reversed(status['last_messages'][-30:])])}
                 </div>
             </aside>
             <section>
@@ -54,14 +53,13 @@ async def index(request):
         </main>
 
         <script>
-            // Автооновлення кожні 5 секунд
             async function fetchStatus() {{
                 try {{
                     const res = await fetch('/status');
                     const data = await res.json();
                     document.getElementById('alert_status').textContent = data.alert_active ? "АКТИВНА" : "ВІДСУТНЯ";
                     document.getElementById('alert_status').className = data.alert_active ? "alert-active" : "alert-inactive";
-                    document.getElementById('messages').innerHTML = data.last_messages.map(m => `<div class="message">${{m.text.slice(0, 100)}}</div>`).reverse().join('');
+                    document.getElementById('messages').innerHTML = data.last_messages.map(m => `<div class="message"><a href="${{m.url}}" target="_blank">${{m.text.slice(0, 100)}}</a></div>`).reverse().join('');
                     document.getElementById('logs').innerHTML = data.logs.slice(-30).join('<br>');
                     document.querySelector('header').innerHTML = `Статус тривоги: <span id="alert_status" class="${{data.alert_active ? "alert-active" : "alert-inactive"}}">${{data.alert_active ? "АКТИВНА" : "ВІДСУТНЯ"}}</span> | Отримано повідомлень: ${{data.messages_received}} | Час роботи: ${{data.uptime}}`;
                 }} catch(e) {{
@@ -82,8 +80,8 @@ async def status_handler(request):
         "uptime": str(uptime).split('.')[0],
         "alert_active": status["alert_active"],
         "messages_received": status["messages_received"],
-        "last_messages": status["last_messages"][-30:],  # останні 30
-        "logs": status["logs"][-30:],  # останні 30
+        "last_messages": status["last_messages"][-30:],
+        "logs": status["logs"][-30:],
     }
     return web.json_response(data)
 
@@ -98,4 +96,3 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', 8080)
     await site.start()
     print("🌐 Web server started at http://0.0.0.0:8080")
-

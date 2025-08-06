@@ -6,7 +6,7 @@ import alert_sources.telegram_checker as tg_checker
 from utils.sender import send_alert_message, send_alert_with_screenshot, send_start_message, edit_message
 from utils.screenshot import take_alert_screenshot
 from utils.state_manager import load_state, save_state
-from web import server  # Імпорт вебсервера
+from web import server
 
 load_dotenv()
 
@@ -48,7 +48,6 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
             await asyncio.sleep(1)
             continue
 
-        # Оновлення вебстатусу
         server.status["messages_received"] += 1
         server.status["last_messages"].append(msg)
         if len(server.status["last_messages"]) > 100:
@@ -120,7 +119,7 @@ async def uptime_loop(user_chat_id: int, start_time: datetime):
         save_state(state)
 
     while True:
-        await asyncio.sleep(300)  # оновлення кожні 5 хв
+        await asyncio.sleep(300)
         await edit_message(timer_message_id, start_time, user_chat_id)
 
 async def main():
