@@ -25,6 +25,9 @@ async def handle_all_messages(event):
     if not username:
         return  # Ігноруємо повідомлення без username
     classified = classify_message(event.message.text, f"https://t.me/{username}/{event.message.id}")
+    print(f"Received message from @{username}: {event.message.text}")
+    print(f"Classified as: {classified}")
+
     if classified:
         classified["date"] = event.message.date.replace(tzinfo=timezone.utc)
         await message_queue.put(classified)
