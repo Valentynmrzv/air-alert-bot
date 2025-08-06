@@ -17,7 +17,7 @@ message_queue = asyncio.Queue()
 catch_up_messages = []
 
 with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
-    monitored_channels = json.load(f)["channels"]
+    monitored_channels = json.load(f)
 
 @client.on(events.NewMessage(chats=monitored_channels))
 async def handle_all_messages(event):
