@@ -16,7 +16,7 @@ client = TelegramClient("anon", API_ID, API_HASH)
 message_queue = asyncio.Queue()
 catch_up_messages = []
 
-with open("channels.json", "r", encoding="utf-8") as f:
+with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
     monitored_channels = json.load(f)["channels"]
 
 @client.on(events.NewMessage(chats=monitored_channels))
