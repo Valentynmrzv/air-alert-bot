@@ -23,12 +23,13 @@ with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
 async def handle_all_messages(event):
     username = getattr(event.chat, 'username', None)
     if not username:
-        return  # Ігноруємо повідомлення без username
+        return
 
     text = event.message.text or ""
     url = f"https://t.me/{username}/{event.message.id}"
 
-    # Додаємо повідомлення до статусу для вебінтерфейсу
+    print(f"[TELEGRAM CHECKER] New message from @{username}: {text[:100]}")
+
     server.status["last_messages"].append({
         "text": text,
         "username": username,
@@ -40,12 +41,12 @@ async def handle_all_messages(event):
 
     classified = classify_message(text, url)
 
-    print(f"Received message from @{username}: {text}")
-    print(f"Classified as: {classified}")
+    print(f"[TELEGRAM CHECKER] Classified message: {classified}")
 
     if classified:
         classified["date"] = event.message.date.replace(tzinfo=timezone.utc)
         await message_queue.put(classified)
+
 
 async def start_monitoring():
     await client.start()
