@@ -21,7 +21,10 @@ with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
 
 @client.on(events.NewMessage(chats=monitored_channels))
 async def handle_all_messages(event):
-    classified = classify_message(event.message.text, f"https://t.me/{event.chat.username}/{event.message.id}")
+    username = getattr(event.chat, 'username', None)
+    if not username:
+        return  # Ігноруємо повідомлення без username
+    classified = classify_message(event.message.text, f"https://t.me/{username}/{event.message.id}")
     if classified:
         classified["date"] = event.message.date.replace(tzinfo=timezone.utc)
         await message_queue.put(classified)

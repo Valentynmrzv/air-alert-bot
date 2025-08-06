@@ -1,6 +1,6 @@
 import os
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from dotenv import load_dotenv
 import alert_sources.telegram_checker as tg_checker
 from utils.sender import send_alert_message, send_alert_with_screenshot, send_start_message, edit_message
@@ -14,11 +14,8 @@ async def monitor_loop(channel_id, user_chat_id, start_time):
     alert_active = state.get("alert_active", False)
     threat_sent = set(state.get("threat_sent", []))
 
-    # ---- Додано: Режим "наздоганяючого" старту ----
     print("🚀 Починаємо 'наздоганяючий' режим...")
     catch_up_messages = await tg_checker.get_catch_up_messages()
-    
-    # Сортуємо за датою, щоб обробляти в хронологічному порядку
     catch_up_messages.sort(key=lambda x: x['date'])
 
     for msg in catch_up_messages:
@@ -29,25 +26,20 @@ async def monitor_loop(channel_id, user_chat_id, start_time):
         if msg["type"] == "alarm" and not alert_active:
             alert_active = True
             threat_sent.clear()
-            # У цьому режимі ми не надсилаємо повідомлення
-            print(f"   [CATCH-UP] Знайдено активну тривогу у {district.title()}. Стан змінено на 'active'.")
+            print(f"   [CATCH-UP] Активна тривога у {district.title()}.")
         
         elif msg["type"] == "all_clear" and alert_active:
             alert_active = False
-            # У цьому режимі ми не надсилаємо повідомлення
-            print(f"   [CATCH-UP] Знайдено відбій тривоги у {district.title()}. Стан змінено на 'inactive'.")
+            print(f"   [CATCH-UP] Відбій тривоги у {district.title()}.")
         
         elif msg["type"] == "info" and alert_active and msg_id not in threat_sent:
             threat_sent.add(msg_id)
-            # У цьому режимі ми не надсилаємо повідомлення
-            print(f"   [CATCH-UP] Знайдено новину під час тривоги: {text[:50]}...")
-    
-    # Зберігаємо оновлений стан після "наздоганяючого" режиму
+            print(f"   [CATCH-UP] Новина під час тривоги: {text[:50]}...")
+
     state["alert_active"] = alert_active
     state["threat_sent"] = list(threat_sent)
     save_state(state)
-    print(f"✅ 'Наздоганяючий' режим завершено. Поточний стан: alert_active={alert_active}")
-    # ---- Кінець режиму "наздоганяючого" старту ----
+    print(f"✅ 'Наздоганяючий' режим завершено. alert_active={alert_active}")
 
     while True:
         msg = await tg_checker.check_telegram_channels()
@@ -68,20 +60,21 @@ async def monitor_loop(channel_id, user_chat_id, start_time):
             state["alert_active"] = alert_active
             state["threat_sent"] = list(threat_sent)
             save_state(state)
+
             alert_text = f"🚨 Повітряна тривога у {district.title()}!"
             screenshot_path = await take_alert_screenshot()
             if screenshot_path:
                 await send_alert_with_screenshot(alert_text, screenshot_path, chat_id=channel_id)
             else:
                 await send_alert_message(alert_text, chat_id=channel_id)
-        
+
         elif msg["type"] == "all_clear" and alert_active:
             alert_active = False
             state["alert_active"] = alert_active
             state["threat_sent"] = list(threat_sent)
             save_state(state)
             await send_alert_message(f"✅ Відбій тривоги у {district.title()}!", chat_id=channel_id)
-        
+
         elif msg["type"] == "info" and alert_active and msg_id not in threat_sent:
             await send_alert_message(f"⚠️ {text}", notify=False, chat_id=channel_id)
             threat_sent.add(msg_id)
@@ -115,10 +108,10 @@ async def main():
     start_time = datetime.now()
 
     if not await tg_checker.client.is_user_authorized():
-        print("❗ Не авторизовано. Будь ласка, запустіть authorize.py для первинної авторизації.")
+        print("❗ Не авторизовано. Запусти authorize.py для авторизації.")
         return
 
-    await tg_checker.fetch_last_messages(60) # Підвантаження повідомлень за 60 хвилин
+    await tg_checker.fetch_last_messages(60)
 
     await asyncio.gather(
         tg_checker.start_monitoring(),
