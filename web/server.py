@@ -76,14 +76,24 @@ async def index(request):
 
 async def status_handler(request):
     uptime = datetime.now() - status["start_time"]
+
+    # Копіюємо last_messages і конвертуємо дату у рядок ISO 8601
+    last_messages_serializable = []
+    for msg in status["last_messages"][-30:]:
+        msg_copy = msg.copy()
+        if isinstance(msg_copy.get("date"), datetime):
+            msg_copy["date"] = msg_copy["date"].isoformat()
+        last_messages_serializable.append(msg_copy)
+
     data = {
         "uptime": str(uptime).split('.')[0],
         "alert_active": status["alert_active"],
         "messages_received": status["messages_received"],
-        "last_messages": status["last_messages"][-30:],
+        "last_messages": last_messages_serializable,
         "logs": status["logs"][-30:],
     }
     return web.json_response(data)
+
 
 async def start_web_server():
     app = web.Application()

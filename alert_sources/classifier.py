@@ -59,7 +59,7 @@ def classify_message(text: str, source_url: str):
 
     # Ключові слова для районів
     brovary_keywords = ["бровар", "бровари", "броварський"]
-    kyiv_keywords = ["київська область", "київщина", "київська"]
+    kyiv_keywords = ["київська область", "київщина"]
 
     district = None
     if any(re.search(rf"\b{word}\b", lower) for word in brovary_keywords):

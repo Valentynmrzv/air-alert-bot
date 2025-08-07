@@ -17,6 +17,12 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
 
     print("🚀 Починаємо 'наздоганяючий' режим...")
     catch_up_messages = await tg_checker.get_catch_up_messages()
+
+    # Конвертуємо дату у рядок, щоб уникнути проблем з JSON серіалізацією
+    for msg in catch_up_messages:
+        if isinstance(msg.get('date'), datetime):
+            msg['date'] = msg['date'].isoformat()
+
     catch_up_messages.sort(key=lambda x: x['date'])
 
     for msg in catch_up_messages:
@@ -47,6 +53,10 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
         if not msg:
             await asyncio.sleep(1)
             continue
+
+        # Конвертація дати в ISO-рядок перед додаванням в статус
+        if isinstance(msg.get('date'), datetime):
+            msg['date'] = msg['date'].isoformat()
 
         server.status["messages_received"] += 1
         server.status["last_messages"].append(msg)
