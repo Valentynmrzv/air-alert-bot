@@ -42,9 +42,9 @@ def classify_message(text: str, url: str):
     }
 
     # Визначення типу повідомлення
-    if "повітряна тривога" in lower or "тривога" in lower or "тревога" in lower:
+    if "повітряна тривога" in lower:
         result["type"] = "alarm"
-    elif "відбій" in lower or "отбой" in lower:
+    elif "Відбій тривоги" in lower or "Відбій повітряної тривоги" in lower:
         result["type"] = "all_clear"
     else:
         result["type"] = "info"
