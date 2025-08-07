@@ -127,7 +127,7 @@ async def main():
     user_chat_id = int(os.getenv("USER_CHAT_ID"))
     start_time = datetime.now()
 
-    await tg_checker.client.start()
+    await tg_checker.client.connect()
 
     if not await tg_checker.client.is_user_authorized():
         print("❗ Не авторизовано. Запусти authorize.py для первинної авторизації.")
