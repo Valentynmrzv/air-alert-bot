@@ -79,7 +79,7 @@ def classify_message(text: str, source_url: str):
     # Відбій тривоги
     
     for pattern in all_clear_patterns:
-        if re.search(pattern, lower):
+        if re.search(pattern, lower) and district is not None:
             return {
                 "district": district,
                 "text": text,
