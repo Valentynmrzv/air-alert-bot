@@ -10,6 +10,12 @@ from web import server
 
 load_dotenv()
 
+def update_alert_status(active: bool, state: dict, server_status: dict):
+    state["alert_active"] = active
+    server_status["alert_active"] = active
+    save_state(state)
+    print(f"[STATUS] alert_active встановлено у {active}")
+
 async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime):
     state = load_state()
     alert_active = state.get("alert_active", False)
@@ -33,17 +39,18 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
         if msg["type"] == "alarm" and not alert_active:
             alert_active = True
             threat_sent.clear()
+            update_alert_status(True, state, server.status)
             print(f"   [CATCH-UP] Активна тривога у {district.title()}.")
 
         elif msg["type"] == "all_clear" and alert_active:
             alert_active = False
+            update_alert_status(False, state, server.status)
             print(f"   [CATCH-UP] Відбій тривоги у {district.title()}.")
 
         elif msg["type"] == "info" and alert_active and msg_id not in threat_sent:
             threat_sent.add(msg_id)
             print(f"   [CATCH-UP] Новина під час тривоги: {text[:50]}...")
 
-    state["alert_active"] = alert_active
     state["threat_sent"] = list(threat_sent)
     save_state(state)
     print(f"✅ 'Наздоганяючий' режим завершено. alert_active={alert_active}")
@@ -73,11 +80,8 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
         if msg["type"] == "alarm" and not alert_active:
             alert_active = True
             threat_sent.clear()
-            state["alert_active"] = alert_active
-            state["threat_sent"] = list(threat_sent)
-            save_state(state)
+            update_alert_status(True, state, server.status)
 
-            server.status["alert_active"] = True
             server.status["logs"].append(f"Тривога у {district.title()}: {text[:50]}")
             if len(server.status["logs"]) > 100:
                 server.status["logs"] = server.status["logs"][-100:]
@@ -92,11 +96,8 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
 
         elif msg["type"] == "all_clear" and alert_active:
             alert_active = False
-            state["alert_active"] = alert_active
-            state["threat_sent"] = list(threat_sent)
-            save_state(state)
+            update_alert_status(False, state, server.status)
 
-            server.status["alert_active"] = False
             server.status["logs"].append(f"Відбій у {district.title()}: {text[:50]}")
             if len(server.status["logs"]) > 100:
                 server.status["logs"] = server.status["logs"][-100:]
