@@ -53,7 +53,8 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
 
     state["threat_sent"] = list(threat_sent)
     save_state(state)
-    print(f"✅ 'Наздоганяючий' режим завершено. alert_active={alert_active}")
+    update_alert_status(alert_active, state, server.status)
+
 
     while True:
         msg = await tg_checker.check_telegram_channels()
@@ -115,6 +116,7 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
             threat_sent.add(msg_id)
             state["threat_sent"] = list(threat_sent)
             save_state(state)
+            update_alert_status(alert_active, state, server.status)
 
 async def uptime_loop(user_chat_id: int, start_time: datetime):
     state = load_state()

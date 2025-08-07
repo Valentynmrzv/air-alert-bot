@@ -56,6 +56,15 @@ def classify_message(text: str, source_url: str):
         return None
 
     lower = text.lower()
+    
+    all_clear_patterns = [
+        r"відбій\s+тривоги",
+        r"відбій\s+повітряної\s+тривоги",
+        r"відбій",
+        r"отбой",
+        r"тривога\s+(скасована|закінчена|відмінена)",
+        r"закінчення\s+тривоги"
+    ]
 
     # Ключові слова для районів
     brovary_keywords = ["бровар", "бровари", "броварський"]
@@ -68,14 +77,16 @@ def classify_message(text: str, source_url: str):
         district = "Київська область"
 
     # Відбій тривоги
-    if any(phrase in lower for phrase in ["відбій тривоги", "відбій повітряної тривоги", "відбій", "отбой"]):
-        return {
-            "district": district,
-            "text": text,
-            "url": source_url,
-            "id": hash(text + source_url),
-            "type": "all_clear"
-        }
+    
+    for pattern in all_clear_patterns:
+        if re.search(pattern, lower):
+            return {
+                "district": district,
+                "text": text,
+                "url": source_url,
+                "id": hash(text + source_url),
+                "type": "all_clear"
+            }
 
     # Повітряна тривога (фраза)
     if "повітряна тривога" in lower:
