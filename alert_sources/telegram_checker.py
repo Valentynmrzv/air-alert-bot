@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
+from telethon.sessions import StringSession
 from dotenv import load_dotenv
 from utils.filter import classify_message
 import json
@@ -14,10 +15,12 @@ load_dotenv()
 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
+# StringSession із .env (згенеруй через gen_session.py і додай TELETHON_SESSION=...)
+STRING = os.getenv("TELETHON_SESSION")
 
-# ✅ авто-сон на FloodWait, щоб акаунт не «викидало»
+# ✅ клієнт Telethon з StringSession (fallback на файл "session", якщо STRING не заданий)
 client = TelegramClient(
-    "session",            # за потреби винеси шлях у SESSION_PATH і підстав тут
+    StringSession(STRING) if STRING else "session",
     API_ID,
     API_HASH,
     flood_sleep_threshold=120
@@ -26,7 +29,7 @@ client = TelegramClient(
 message_queue = asyncio.Queue()
 catch_up_messages = []
 
-# ⚠️ Переконайся, що шлях вірний відносно цього файлу
+# ⚠️ Переконайся, що шлях вірний відносно кореня проєкту
 with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
     monitored_channels = json.load(f)
 
@@ -66,7 +69,7 @@ THREAT_KEYWORDS = [
     "сирена", "небезпека", "загроза",
     # RU-варіанти
     "шахедов", "дронов", "беспилотник", "беспилотники",
-    "ракеты", "баллистик", "искандер", "калибр",
+    "ракеты", "ракетн", "баллистик", "искандер", "калибр",
     "взлет", "авиация",
     "удар", "удары", "обстрел", "обстрелы",
     "взрыв", "взрывы", "прилет", "прилеты",
@@ -119,7 +122,7 @@ def _passes_prefilter_when_active(lower: str) -> bool:
     """Під час активної тривоги пропускаємо якщо:
        - є офіційні фрази (ALARM_PHRASES), або
        - є ХОЧ ОДНА загроза, або
-       - є ХОЧ ОДНА локація
+       - є ХОЧ ОДНА локація.
     """
     if any(p in lower for p in ALARM_PHRASES):
         return True
@@ -158,7 +161,7 @@ async def handle_all_messages(event):
         if not _passes_prefilter_when_active(lower):
             return
 
-    # Debounce на однакові тексти/репости (загально для всіх)
+    # Debounce на однакові тексти/репости (для всіх)
     sig = hash((username, text))
     if sig in _RECENT_SIGS:
         return
@@ -206,7 +209,7 @@ async def check_telegram_channels():
     return None
 
 
-# ⚠️ catch-up краще НЕ ВИКЛИКАТИ з main.py (це зайві API-запити)
+# ⚠️ catch-up краще НЕ ВИКЛИКАТИ з main.py (зайві API-запити)
 async def fetch_last_messages(minutes: int):
     if not await client.is_user_authorized():
         print("❗ Не авторизовано для підвантаження повідомлень.")
