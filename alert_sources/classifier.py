@@ -1,83 +1,39 @@
 import re
 
-def classify_alert_message(text: str, url: str):
-    """
-    Класифікує офіційні повідомлення тривоги та відбою
-    у форматі каналу @air_alert_ua, наприклад:
-    "Повітряна тривога в Броварський район"
-    "Відбій тривоги в Київська область"
+BROVARY_KEYWORDS = ["бровар", "бровари", "броварський"]
+KYIVREGION_KEYWORDS = ["київська область", "київщина"]
 
-    Повертає словник із ключами:
-    - type: 'alarm' або 'all_clear'
-    - district: район
-    - text: оригінальний текст
-    - url: посилання на повідомлення
-    - id: унікальний ідентифікатор (хеш)
-    """
-    if not text:
-        return None
-
-    alarm_match = re.search(r"повітряна тривога в ([\w\s\-]+)", text, re.I)
-    all_clear_match = re.search(r"відбій тривоги в ([\w\s\-]+)", text, re.I)
-
-    if alarm_match:
-        return {
-            "type": "alarm",
-            "district": alarm_match.group(1).strip(),
-            "text": text,
-            "url": url,
-            "id": hash(text + url)
-        }
-    if all_clear_match:
-        return {
-            "type": "all_clear",
-            "district": all_clear_match.group(1).strip(),
-            "text": text,
-            "url": url,
-            "id": hash(text + url)
-        }
+def _district_from_text(lower: str):
+    if any(re.search(rf"\b{w}\b", lower) for w in BROVARY_KEYWORDS):
+        return "Броварський район"
+    if any(re.search(rf"\b{w}\b", lower) for w in KYIVREGION_KEYWORDS):
+        return "Київська область"
     return None
 
 
 def classify_message(text: str, source_url: str):
     """
-    Класифікує повідомлення за типом (тривога/відбій/info), районом і загрозою.
-    Повертає словник із ключами:
-    - district: район (наприклад, 'Броварський район' або 'Київська область')
-    - type: 'alarm', 'all_clear' або 'info' (тривога, відбій або інформація)
-    - threat_type: (опційно) тип загрози, напр. ракета, балістика
-    - text: оригінальний текст
-    - url: посилання на повідомлення
-    - id: унікальний ідентифікатор (хеш)
-
-    Якщо повідомлення не релевантне — повертає None.
+    Повертає:
+      - type: 'alarm' | 'all_clear' | 'info'
+      - district: 'Броварський район' | 'Київська область' | None
+      - threat_type: str | None
+      - text, url, id
     """
     if not text:
         return None
 
     lower = text.lower()
-    
+    district = _district_from_text(lower)
+
+    # Відбій (тільки якщо наш район визначений)
     all_clear_patterns = [
         r"відбій\s+тривоги",
         r"відбій\s+повітряної\s+тривоги",
-        r"відбій",
-        r"отбой",
+        r"\bвідбій\b",
+        r"\bотбой\b",
         r"тривога\s+(скасована|закінчена|відмінена)",
         r"закінчення\s+тривоги"
     ]
-
-    # Ключові слова для районів
-    brovary_keywords = ["бровар", "бровари", "броварський"]
-    kyiv_keywords = ["київська область", "київщина"]
-
-    district = None
-    if any(re.search(rf"\b{word}\b", lower) for word in brovary_keywords):
-        district = "Броварський район"
-    elif any(re.search(rf"\b{word}\b", lower) for word in kyiv_keywords):
-        district = "Київська область"
-
-    # Відбій тривоги
-    
     for pattern in all_clear_patterns:
         if re.search(pattern, lower) and district is not None:
             return {
@@ -88,8 +44,8 @@ def classify_message(text: str, source_url: str):
                 "type": "all_clear"
             }
 
-    # Повітряна тривога (фраза)
-    if "повітряна тривога" in lower:
+    # Пряма згадка тривоги (тільки якщо район наш або є загроза)
+    if "повітряна тривога" in lower and district is not None:
         return {
             "district": district,
             "text": text,
@@ -98,12 +54,13 @@ def classify_message(text: str, source_url: str):
             "type": "alarm"
         }
 
-    # Глобальні загрози — тривога незалежно від району
-    global_threats = ["міг", "авіація", "ракета", "іскандер", "балістика", "пуски", "зліт"]
+    # Глобальні загрози (можемо сигналізувати alarm навіть без району,
+    # але у main.py все одно фільтруємо лише наші райони)
+    global_threats = ["міг", "авіація", "ракета", "іскандер", "балістик", "пуски", "пуск", "зліт", "кинжал", "калібр"]
     for threat in global_threats:
-        if threat in lower:
+        if re.search(rf"\b{threat}\w*\b", lower):
             return {
-                "district": None,
+                "district": district,
                 "text": text,
                 "url": source_url,
                 "id": hash(text + source_url),
@@ -111,17 +68,13 @@ def classify_message(text: str, source_url: str):
                 "threat_type": threat
             }
 
-
-    # Локальні загрози + район — тривога
+    # Локальні загрози — враховуємо тільки якщо район наш
     local_threats = [
-        "шахед", "вибух", "вибухівка", "детонація", "детонації", "бомба", "бомбовий",
-        "бомбардування", "розрив", "пошкодження", "руйнування", "удар", "вибуховий пристрій",
-        "підрив", "підриви", "страйк", "снаряд", "артилерія", "міномет", "мінування",
-        "мінометний", "обстріл", "знищення", "пожежа", "пожежі",
-        "ппо", "зеніт", "зенітки", "протиповітряна оборона", "протиповітряна оборона", "бпла"
+        "шахед", "вибух", "детонац", "бомба", "удар",
+        "обстріл", "артилер", "міномет", "бпла", "ппо", "зеніт"
     ]
     for threat in local_threats:
-        if re.search(rf"\b{threat}\b", lower):
+        if re.search(rf"\b{threat}\w*\b", lower):
             if district:
                 return {
                     "district": district,
@@ -132,10 +85,9 @@ def classify_message(text: str, source_url: str):
                     "threat_type": threat
                 }
             else:
-                # Якщо локальна загроза, але район не знайдено — не класифікуємо
                 return None
 
-    # Якщо є район, але немає тривог — інформаційне
+    # Якщо є район, але без тривоги — інфо для нього
     if district:
         return {
             "district": district,
@@ -145,5 +97,4 @@ def classify_message(text: str, source_url: str):
             "type": "info"
         }
 
-    # Якщо нічого не релевантного
     return None
