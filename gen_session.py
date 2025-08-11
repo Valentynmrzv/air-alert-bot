@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH"))
+api_hash = os.getenv("API_HASH")
 phone = os.getenv("TELEGRAM_PHONE")
 
 with TelegramClient(StringSession(), api_id, api_hash) as client:
