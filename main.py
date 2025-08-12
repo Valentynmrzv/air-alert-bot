@@ -164,16 +164,14 @@ async def main():
     user_chat_id = int(os.getenv("USER_CHAT_ID"))
     start_time = datetime.now()
 
+    # Підключаємось
     await tg_checker.client.connect()
 
+    # Перевіряємо авторизацію без інтерактиву
     if not await tg_checker.client.is_user_authorized():
-        if not await tg_checker.client.is_user_authorized():
-            try:
-                await tg_checker.client.start()  # активує StringSession, якщо вона валідна
-            except Exception as e:
-                print(f"❗ Не авторизовано (StringSession не спрацювала): {e}")
-                print("Перевір TELETHON_SESSION у .env або згенеруй новий gen_session.py")
-                return
+        print("❗ StringSession невалідний або не авторизований. Онови TELETHON_SESSION у .env")
+        return
+
 
     # catch-up вимкнено заради економії лімітів
     # await tg_checker.fetch_last_messages(60)
