@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH"))
+api_hash = os.getenv("API_HASH")
 
 async def main():
     async with TelegramClient(StringSession(), api_id, api_hash) as client:
