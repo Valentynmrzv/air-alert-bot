@@ -2,23 +2,33 @@
 import os
 import asyncio
 import time
+import json
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
+
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
+
 from utils.filter import classify_message
-import json
 from web import server  # live-статус та SSE
 
-load_dotenv()
+# =========================
+# Завантаження .env по абсолютному шляху
+# =========================
+BASE_DIR = Path(__file__).resolve().parents[1]  # корінь проекту: .../air-alert-bot
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
-# StringSession із .env (згенеруй через gen_session.py і додай TELETHON_SESSION=...)
 STRING = os.getenv("TELETHON_SESSION")
 
-# ✅ клієнт Telethon з StringSession (fallback на файл "session", якщо STRING не заданий)
+print(f"[ENV] .env at: {ENV_PATH}")
+print(f"[ENV] TELETHON_SESSION loaded: {'YES' if STRING else 'NO'}")
+
+# ✅ клієнт Telethon зі StringSession (fallback на файл "session", якщо STRING не заданий)
 client = TelegramClient(
     StringSession(STRING) if STRING else "session",
     API_ID,
@@ -29,9 +39,13 @@ client = TelegramClient(
 message_queue = asyncio.Queue()
 catch_up_messages = []
 
-# ⚠️ Переконайся, що шлях вірний відносно кореня проєкту
-with open("alert_sources/channels.json", "r", encoding="utf-8") as f:
+# =========================
+# Канали — шлях по абсолютному шляху
+# =========================
+CHANNELS_PATH = BASE_DIR / "alert_sources" / "channels.json"
+with open(CHANNELS_PATH, "r", encoding="utf-8") as f:
     monitored_channels = json.load(f)
+print(f"[CFG] Loaded {len(monitored_channels)} channels from {CHANNELS_PATH}")
 
 # 🔒 «тривога/відбій» довіряємо тільки офіційному
 OFFICIAL_ALARM_SOURCES = {"air_alert_ua"}
@@ -48,10 +62,9 @@ _last_handled_at: dict[str, float] = {}  # username -> monotonic ts
 # =========================
 # КЛЮЧІ ДЛЯ ПРЕФІЛЬТРА ПІД ЧАС АКТИВНОЇ ТРИВОГИ
 # =========================
-
 ALARM_PHRASES = [
     "повітряна тривога", "відбій тривоги",
-    "воздушная тревога", "отбой тревоги"
+    "воздушная тревога", "отбой тревоги",
 ]
 
 # 1) Загрози (слова + емодзі; шукаємо як підрядок у lower)
