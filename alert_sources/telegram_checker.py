@@ -109,7 +109,7 @@ REGION_KEYWORDS = [
     "вишнев", "васильк", "березан", "баришівк", "барышевк",
 ]
 
-BRO_REVISOR_BONUS = {"на нас", "не летить", "летить"}
+BRO_REVISOR_BONUS = {"на нас", "не летить", "летить", "не фіксується"}
 
 def _passes_prefilter_when_active(lower: str, username: str | None) -> bool:
     if any(p in lower for p in ALARM_PHRASES):
