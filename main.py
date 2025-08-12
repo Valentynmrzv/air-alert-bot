@@ -167,8 +167,13 @@ async def main():
     await tg_checker.client.connect()
 
     if not await tg_checker.client.is_user_authorized():
-        print("❗ Не авторизовано. Запусти authorize.py для первинної авторизації.")
-        return
+        if not await tg_checker.client.is_user_authorized():
+            try:
+                await tg_checker.client.start()  # активує StringSession, якщо вона валідна
+            except Exception as e:
+                print(f"❗ Не авторизовано (StringSession не спрацювала): {e}")
+                print("Перевір TELETHON_SESSION у .env або згенеруй новий gen_session.py")
+                return
 
     # catch-up вимкнено заради економії лімітів
     # await tg_checker.fetch_last_messages(60)
