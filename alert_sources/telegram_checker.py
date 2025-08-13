@@ -90,7 +90,7 @@ THREAT_KEYWORDS = [
 THREAT_KEYWORDS_RAPID = [
     # балістика / МіГ / пуски
     "балістика", "балістичн", "баллистик",
-    "миг-31", "міг-31", "миг-31", "міг-31", "міг31", "миг31", "міг", "миг",
+    "міг-31", "миг-31", "міг31", "миг31", "міг", "миг",
     "кинжал", "искандер",
     "пуск", "пуски", "запуск", "запуски", "старт",
 ]
@@ -137,16 +137,18 @@ def _passes_prefilter_when_active(lower: str, username: str) -> bool:
         return True
     return False
 
-def _derive_flags(lower: str, username: str) -> tuple[bool, bool]:
-    """Повертає (region_hit, rapid_hit) для INFO."""
+def _derive_flags(lower: str, username: str) -> tuple[bool, bool, bool]:
+    """Повертає (region_hit, rapid_hit, revisor_bonus) для INFO."""
     region_hit = _contains_any(lower, REGION_KEYWORDS)
     rapid_hit = _contains_any(lower, THREAT_KEYWORDS_RAPID)
+    revisor_bonus = False
 
     # Бонуси для bro_revisor: короткі фрази типу «на нас», «летить» і т.д.
     if username == "bro_revisor" and _contains_any(lower, BRO_REVISOR_BONUS):
         region_hit = True  # поводимось як з локальною гео-важливістю
+        revisor_bonus = True
 
-    return region_hit, rapid_hit
+    return region_hit, rapid_hit, revisor_bonus
 
 @client.on(events.NewMessage(chats=monitored_channels))
 async def handle_all_messages(event):
@@ -185,7 +187,6 @@ async def handle_all_messages(event):
 
     # Класифікація (додаємо source для прозорості)
     classified = classify_message(text, url, source=username)
-    # Якщо класифікатор нічого не повернув — вихід
     if not classified:
         print(f"[TELEGRAM CHECKER] @{username} → None")
         return
@@ -194,11 +195,13 @@ async def handle_all_messages(event):
     if classified["type"] in ("alarm", "all_clear") and username not in OFFICIAL_ALARM_SOURCES:
         classified["type"] = "info"
 
-    # Доповнюємо INFO прапорцями region_hit / rapid_hit
+    # Доповнюємо INFO прапорцями region_hit / rapid_hit / revisor_bonus
     if classified["type"] == "info":
-        region_hit, rapid_hit = _derive_flags(lower, username)
+        region_hit, rapid_hit, revisor_bonus = _derive_flags(lower, username)
         classified["region_hit"] = region_hit
         classified["rapid_hit"]  = rapid_hit
+        if revisor_bonus:
+            classified["revisor_bonus"] = True
 
         # Якщо класифікатор не визначив threat_type, спробуємо грубо
         if not classified.get("threat_type"):
@@ -262,12 +265,21 @@ async def fetch_last_messages(minutes: int):
                         if cl["type"] in ("alarm", "all_clear") and username not in OFFICIAL_ALARM_SOURCES:
                             cl["type"] = "info"
 
-                        # Додамо прапорці і тут, щоб catch-up теж мав логіку
                         lower = (msg.text or "").lower()
                         if cl["type"] == "info":
-                            region_hit, rapid_hit = _derive_flags(lower, username)
+                            region_hit, rapid_hit, revisor_bonus = _derive_flags(lower, username)
                             cl["region_hit"] = region_hit
                             cl["rapid_hit"] = rapid_hit
+                            if revisor_bonus:
+                                cl["revisor_bonus"] = True
+
+                            if not cl.get("threat_type"):
+                                if "ракета" in lower or "ракет" in lower:
+                                    cl["threat_type"] = "ракета"
+                                elif "шахед" in lower or "дрон" in lower or "бпла" in lower:
+                                    cl["threat_type"] = "шахед/дрон"
+                                elif _contains_any(lower, ["балістика", "баллистик", "миг", "міг", "кинжал", "искандер"]):
+                                    cl["threat_type"] = "балістика/МіГ"
 
                         cl["date"] = msg.date.replace(tzinfo=timezone.utc)
                         catch_up_messages.append(cl)
