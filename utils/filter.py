@@ -1,9 +1,7 @@
 import re
 
-# Наші дозволені регіони (нормалізація робиться тут же)
 ALLOWED_DISTRICTS = {"броварський район", "київська область"}
 
-# Пошукові ключі для гео і швидких загроз
 REGION_KEYWORDS = [
     "бровар", "бровари", "броварськ",
     "київська область", "київщина", "київ",
@@ -26,26 +24,26 @@ THREAT_WORDS = [
     "шахед", "shahed", "дрон", "бпла", "ракета", "балістик", "іскандер", "кинжал",
 ]
 
-# Бонус-фрази для @bro_revisor
 BRO_REVISOR_BONUS = {"на нас", "не летить", "летить", "не фіксується", "дорозвідка"}
 
-# Офіційний формат @air_alert_ua: допускаємо "в" або "у" і «шум» у тексті
+# Більш «м’який» офіційний шаблон:
+# ... (повітряна|відбій) ... (в|у)? ... <регіон до кінця рядка/роздільника>
 OFFICIAL_RE = re.compile(
-    r"(повітряна\s+тривога|відбій\s+тривоги)\s+(?:в|у)\s+([^\n\.#!]+)",
+    r"(повітряна\s+тривога|відбій\s+тривоги)[^a-zа-яіїєґ]*?(?:в|у)?\s*([^\n\.#!]+)",
     re.IGNORECASE | re.UNICODE,
 )
 
-# --- допоміжні ---
-
 def _normalize_text(s: str) -> str:
-    """Прибрати жирний/підкреслення/емодзі/зайві символи, зберегти URL та слова."""
     if not s:
         return ""
     t = s.lower()
-    t = t.replace("_", " ")                  # #Київська_область -> Київська область
-    t = t.replace("*", "").replace("`", "")  # прибрати markdown
-    t = re.sub(r"[#]", " ", t)               # решітку як розділювач
-    # прибрати «сміття», але лишити букви/цифри/пробіли/URL-символи
+    # NBSP та подібні у звичайний пробіл
+    t = t.replace("\u00a0", " ").replace("\u2009", " ").replace("\u202f", " ")
+    # markdown / код
+    t = t.replace("*", "").replace("`", "")
+    # хештеги виду #Київська_область
+    t = t.replace("_", " ").replace("#", " ")
+    # прибираємо «сміття», але лишаємо букви/цифри/URL-символи
     t = re.sub(r"[^\w\s:/\.\-\(\)]", " ", t, flags=re.UNICODE)
     t = re.sub(r"\s+", " ", t).strip()
     return t
@@ -67,43 +65,37 @@ def _guess_threat(lower: str):
             return w
     return None
 
-# --- головна ---
-
 def classify_message(text: str, url: str, source: str | None = None):
-    """
-    Повертає:
-      - для офіційного @air_alert_ua: dict з type in {'alarm','all_clear'} або None якщо не наш регіон;
-      - для інших: dict з type='info' + region_hit/rapid_hit/revisor_bonus + threat_type (якщо знайдено).
-    """
     if not text:
         return None
 
     lower_raw = text.lower()
     lower = _normalize_text(text)
 
-    # 1) ОФІЦІЙНИЙ канал: шукаємо "повітряна/відбій ... (в|у) <регіон>"
+    # ---------- ОФІЦІЙНИЙ ----------
     if source == "air_alert_ua":
         m = OFFICIAL_RE.search(lower)
-        if not m:
-            # fallback: інколи є лише хештег регіону без "в|у"
-            if "броварський район" in lower:
-                phrase = "повітряна тривога" if "повітряна тривога" in lower else ("відбій тривоги" if "відбій тривоги" in lower else None)
-                if phrase:
-                    district_norm = "броварський район"
-                else:
-                    return None
-            elif "київська область" in lower:
-                phrase = "повітряна тривога" if "повітряна тривога" in lower else ("відбій тривоги" if "відбій тривоги" in lower else None)
-                if phrase:
-                    district_norm = "київська область"
-                else:
-                    return None
-            else:
-                return None
-        else:
+        phrase = None
+        district_norm = None
+
+        if m:
             phrase = m.group(1)
-            district_raw = m.group(2)
-            district_norm = _norm_district(district_raw)
+            district_norm = _norm_district(m.group(2))
+        else:
+            # Fallback 1: є ключова фраза і «броварський район»/«київська область» десь у тексті
+            if "повітряна тривога" in lower or "відбій тривоги" in lower:
+                if "броварський район" in lower:
+                    phrase = "повітряна тривога" if "повітряна тривога" in lower else "відбій тривоги"
+                    district_norm = "броварський район"
+                elif "київська область" in lower:
+                    phrase = "повітряна тривога" if "повітряна тривога" in lower else "відбій тривоги"
+                    district_norm = "київська область"
+
+        if not phrase or not district_norm:
+            # раз у логах сипле None — допоможемо собі дебагом
+            print("[FILTER DEBUG] Official miss:",
+                  {"src": source, "norm": lower[:180], "raw": text[:120]})
+            return None
 
         if district_norm not in ALLOWED_DISTRICTS:
             return None
@@ -117,16 +109,14 @@ def classify_message(text: str, url: str, source: str | None = None):
             "type": typ,
         }
 
-    # 2) НЕофіційні канали → INFO
+    # ---------- НЕофіційні → INFO ----------
     region_hit = _is_region_hit(lower)
     rapid_hit = _is_rapid_hit(lower)
     threat = _guess_threat(lower)
 
     revisor_bonus = False
     if source == "bro_revisor":
-        # бонус — короткі фрази, що у них означають місцеву (для нас) релевантність
         revisor_bonus = any(k in lower_raw for k in BRO_REVISOR_BONUS)
-        # якщо є бонус — вважаємо це локально важливим
         if revisor_bonus and not region_hit:
             region_hit = True
 
