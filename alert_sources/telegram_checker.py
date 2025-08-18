@@ -30,8 +30,19 @@ print(f"[ENV] TELETHON_SESSION loaded: {'YES' if STRING else 'NO'}")
 print(f"[ENV] API_ID={API_ID} (hash present: {'YES' if API_HASH else 'NO'})")
 
 # ✅ клієнт Telethon зі StringSession (fallback на файл "session", якщо STRING не заданий)
+# client = TelegramClient(
+#     StringSession(STRING) if STRING else "session",
+#     API_ID,
+#     API_HASH,
+#     flood_sleep_threshold=120
+# )
+
+from pathlib import Path
+
+SESSION_FILE = (BASE_DIR / "telethon.session").as_posix()
+
 client = TelegramClient(
-    StringSession(STRING) if STRING else "session",
+    SESSION_FILE,  # ← файл-сесія замість StringSession
     API_ID,
     API_HASH,
     flood_sleep_threshold=120
