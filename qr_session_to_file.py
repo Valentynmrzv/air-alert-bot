@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH"))
+API_HASH = os.getenv("API_HASH")
 SESSION_FILE = (Path(__file__).resolve().parent / "telethon.session").as_posix()
 
 async def main():
