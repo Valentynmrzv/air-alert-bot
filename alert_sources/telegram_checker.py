@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
-from telethon.sessions import StringSession
 from dotenv import load_dotenv
 
 from utils.filter import classify_message
@@ -23,29 +22,28 @@ load_dotenv(dotenv_path=ENV_PATH)
 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
-STRING = (os.getenv("TELETHON_SESSION") or "").strip()
 
 print(f"[ENV] .env at: {ENV_PATH}")
-print(f"[ENV] TELETHON_SESSION loaded: {'YES' if STRING else 'NO'}")
 print(f"[ENV] API_ID={API_ID} (hash present: {'YES' if API_HASH else 'NO'})")
 
-# ✅ клієнт Telethon зі StringSession (fallback на файл "session", якщо STRING не заданий)
-# client = TelegramClient(
-#     StringSession(STRING) if STRING else "session",
-#     API_ID,
-#     API_HASH,
-#     flood_sleep_threshold=120
-# )
-
-from pathlib import Path
-
+# =========================
+# Файл-сесія на стабільному шляху
+# =========================
 SESSION_FILE = (BASE_DIR / "telethon.session").as_posix()
 
+# =========================
+# ЄДИНИЙ екземпляр клієнта з «паспортом апки»
+# =========================
 client = TelegramClient(
-    SESSION_FILE,  # ← файл-сесія замість StringSession
+    SESSION_FILE,
     API_ID,
     API_HASH,
-    flood_sleep_threshold=120
+    flood_sleep_threshold=120,
+    device_model="Raspberry Pi 4",
+    system_version="Debian 12 (Bookworm)",
+    app_version="AirAlertBot 1.3",
+    lang_code="uk",
+    system_lang_code="uk",
 )
 
 message_queue = asyncio.Queue()
@@ -99,7 +97,6 @@ THREAT_KEYWORDS = [
 
 # Швидка загроза — дозволяє проходити без GEO під час тривоги
 THREAT_KEYWORDS_RAPID = [
-    # балістика / МіГ / пуски
     "балістика", "балістичн", "баллистик",
     "міг-31", "миг-31", "міг31", "миг31", "міг", "миг",
     "кинжал", "искандер",
@@ -108,24 +105,19 @@ THREAT_KEYWORDS_RAPID = [
 
 # GEO ключі (стеми і близькі локації)
 REGION_KEYWORDS = [
-    # Бровари/район (включаючи 'бровари', 'броварськ' тощо)
     "бровар", "бровари", "броварськ",
-    # Область / Київ / Київщина
     "київська область", "київщина", "київ",
-    # Околиці (стемінг)
     "княжич", "требух", "калинівк", "велика димер", "мала димер",
     "богданівк", "красилівк", "погреб", "зазим", "літк", "пухівк",
     "рожн", "світильн", "семиполк", "квітнев", "перемог", "гогол", "калит",
-    # Ближні локації
     "бориспіл", "троєщин", "лісов", "дарниц", "вишгород", "обух",
     "ірпін", "буча", "гостомел", "вишнев", "васильк", "березан", "баришівк",
-    # RU-варианти базових назв (мінімально)
     "киев", "киевская область", "броварск", "бровары",
 ]
 
-# Бонус-фрази для bro_revisor — навіть без GEO
+# Бонус-фрази для bro_revisor — навіть без GEO (у нижньому регістрі, бо text.lower())
 BRO_REVISOR_BONUS = {
-    "на нас", "не летить", "летить", "не фіксується", "дорозвідка"
+    "на нас", "не летить", "летить", "не фіксується", "дорозвідка", "ппо"
 }
 
 def _contains_any(lower: str, keys: list[str] | set[str]) -> bool:
@@ -154,7 +146,6 @@ def _derive_flags(lower: str, username: str) -> tuple[bool, bool, bool]:
     rapid_hit = _contains_any(lower, THREAT_KEYWORDS_RAPID)
     revisor_bonus = False
 
-    # Бонуси для bro_revisor: короткі фрази типу «на нас», «летить» і т.д.
     if username == "bro_revisor" and _contains_any(lower, BRO_REVISOR_BONUS):
         region_hit = True  # поводимось як з локальною гео-важливістю
         revisor_bonus = True
@@ -194,6 +185,7 @@ async def handle_all_messages(event):
         return
     _RECENT_SIGS.add(sig)
     if len(_RECENT_SIGS) > _MAX_SIGS:
+        # безпечне "очищення": set.pop() видаляє довільний елемент — нас це влаштовує
         _RECENT_SIGS.pop()
 
     # Класифікація (додаємо source для прозорості)
@@ -242,7 +234,10 @@ async def handle_all_messages(event):
     await server.push_update()
 
 async def start_monitoring():
-    await client.start()
+    """
+    УВАГА: НЕ стартуємо клієнт тут.
+    Клієнт стартує один раз у main.py (щоб не плодити зайві логіни).
+    """
     await client.run_until_disconnected()
 
 async def check_telegram_channels():
@@ -287,7 +282,7 @@ async def fetch_last_messages(minutes: int):
                             if not cl.get("threat_type"):
                                 if "ракета" in lower or "ракет" in lower:
                                     cl["threat_type"] = "ракета"
-                                elif "шахед" in lower or "дрон" in lower or "бпла" in lower:
+                                elif "শахед" in lower or "дрон" in lower or "бпла" in lower:
                                     cl["threat_type"] = "шахед/дрон"
                                 elif _contains_any(lower, ["балістика", "баллистик", "миг", "міг", "кинжал", "искандер"]):
                                     cl["threat_type"] = "балістика/МіГ"

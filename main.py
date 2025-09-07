@@ -20,13 +20,11 @@ load_dotenv()
 # Два дозволені регіони
 ALLOWED_DISTRICTS = {"броварський район", "київська область"}
 
-
 def update_alert_status(active: bool, state: dict, server_status: dict):
     state["alert_active"] = active
     server_status["alert_active"] = active
     save_state(state)
     print(f"[STATUS] alert_active встановлено у {active}")
-
 
 async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime):
     state = load_state()
@@ -57,9 +55,8 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
         rapid_hit = bool(msg.get("rapid_hit"))     # з чекера
         revisor_bonus = bool(msg.get("revisor_bonus"))  # ✓ додано
 
-        # ---------- ALARM / ALL_CLEAR (офіційні події вже відфільтровані в чекері) ----------
+        # ---------- ALARM / ALL_CLEAR ----------
         if msg["type"] in ("alarm", "all_clear"):
-            # працюємо лише з нашими регіонами
             if district not in ALLOWED_DISTRICTS:
                 continue
 
@@ -87,7 +84,6 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                         alert_text, screenshot_path, chat_id=channel_id
                     )
                 else:
-                    # Markdown тут безпечний (текст контрольований)
                     await send_alert_message(
                         alert_text, notify=True, chat_id=channel_id, parse_mode="Markdown"
                     )
@@ -116,10 +112,6 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
             continue
 
         # ---------- INFO ПІД ЧАС ТРИВОГИ ----------
-        # Під час активної тривоги шлемо в канал info, якщо:
-        #   - є наші GEO (region_hit), АБО
-        #   - це швидка загроза (rapid_hit: балістика/МіГ/пуск), АБО
-        #   - це короткий апдейт від bro_revisor (revisor_bonus).
         if msg["type"] == "info" and alert_active and msg_id not in threat_sent:
             if region_hit or rapid_hit or revisor_bonus:
                 server.status["logs"].append(f"Новина: {text[:160]}")
@@ -138,7 +130,6 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 state["threat_sent"] = list(threat_sent)
                 save_state(state)
             else:
-                # діагностика чому пропущено
                 why = []
                 if not region_hit:
                     why.append("нема GEO")
@@ -151,7 +142,6 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 )
                 if len(server.status["logs"]) > 100:
                     server.status["logs"] = server.status["logs"][-100:]
-
 
 async def uptime_loop(user_chat_id: int, start_time: datetime):
     state = load_state()
@@ -175,21 +165,19 @@ async def uptime_loop(user_chat_id: int, start_time: datetime):
         await asyncio.sleep(300)
         await edit_message(timer_message_id, start_time, user_chat_id)
 
-
 async def main():
     channel_id = int(os.getenv("CHANNEL_ID"))
     user_chat_id = int(os.getenv("USER_CHAT_ID"))
     start_time = datetime.now()
 
-    await tg_checker.client.connect()
-
-    if not await tg_checker.client.is_user_authorized():
-        try:
-            await tg_checker.client.start()
-        except Exception as e:
-            print(f"❗ Не авторизовано: {e}")
-            print("Онови TELETHON_SESSION у .env (QR/генератор сесії).")
-            return
+    # ЄДИНЕ місце, де стартуємо клієнт (з підтримкою 2FA)
+    TG_2FA_PASSWORD = os.getenv("TG_2FA_PASSWORD", "")
+    try:
+        await tg_checker.client.start(password=TG_2FA_PASSWORD or None)
+    except Exception as e:
+        print(f"❗ Не авторизовано: {e}")
+        print("Онови сесію (QR/генератор) або TG_2FA_PASSWORD у .env.")
+        return
 
     # catch-up вимкнено (економія лімітів)
     # await tg_checker.fetch_last_messages(60)
@@ -197,11 +185,10 @@ async def main():
     await server.start_web_server()
 
     await asyncio.gather(
-        tg_checker.start_monitoring(),
+        tg_checker.start_monitoring(),                 # тут лише run_until_disconnected()
         monitor_loop(channel_id, user_chat_id, start_time),
         uptime_loop(user_chat_id, start_time),
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
