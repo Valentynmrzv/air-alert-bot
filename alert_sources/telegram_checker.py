@@ -32,7 +32,7 @@ print(f"[ENV] API_ID={API_ID} (hash present: {'YES' if API_HASH else 'NO'})")
 SESSION_FILE = (BASE_DIR / "telethon.session").as_posix()
 
 # =========================
-# ЄДИНИЙ екземпляр клієнта з «паспортом апки»
+# ЄДИНИЙ екземпляр клієнта з «паспортом апки» + вимкнений IPv6
 # =========================
 client = TelegramClient(
     SESSION_FILE,
@@ -41,9 +41,14 @@ client = TelegramClient(
     flood_sleep_threshold=120,
     device_model="Raspberry Pi 4",
     system_version="Debian 12 (Bookworm)",
-    app_version="AirAlertBot 1.3",
+    app_version="AirAlertBot 1.4",
     lang_code="uk",
     system_lang_code="uk",
+    use_ipv6=False,            # ← частий фікс дропів
+    connection_retries=None,   # нескінченні спроби підключення
+    retry_delay=3,             # пауза між спробами
+    request_retries=5,         # ретраї запитів
+    connection_timeout=10,     # щоб швидше виявляти мережеві зависання
 )
 
 message_queue = asyncio.Queue()
@@ -91,11 +96,9 @@ THREAT_KEYWORDS = [
     "вибух", "вибухи", "взрыв", "взрывы",
     "приліт", "прильот", "прильоти", "прилет", "прилеты",
     "сирена", "небезпека", "загроза", "опасност", "угроза",
-    # емодзі (можуть траплятися)
     "🛵", "🚀", "💥", "✈️", "💣", "🛩️", "🎯", "🧨", "🚨", "🔥",
 ]
 
-# Швидка загроза — дозволяє проходити без GEO під час тривоги
 THREAT_KEYWORDS_RAPID = [
     "балістика", "балістичн", "баллистик",
     "міг-31", "миг-31", "міг31", "миг31", "міг", "миг",
@@ -103,7 +106,6 @@ THREAT_KEYWORDS_RAPID = [
     "пуск", "пуски", "запуск", "запуски", "старт",
 ]
 
-# GEO ключі (стеми і близькі локації)
 REGION_KEYWORDS = [
     "бровар", "бровари", "броварськ",
     "київська область", "київщина", "київ",
@@ -115,7 +117,6 @@ REGION_KEYWORDS = [
     "киев", "киевская область", "броварск", "бровары",
 ]
 
-# Бонус-фрази для bro_revisor — навіть без GEO (у нижньому регістрі, бо text.lower())
 BRO_REVISOR_BONUS = {
     "на нас", "не летить", "летить", "не фіксується", "дорозвідка", "ппо"
 }
@@ -124,12 +125,6 @@ def _contains_any(lower: str, keys: list[str] | set[str]) -> bool:
     return any(k in lower for k in keys)
 
 def _passes_prefilter_when_active(lower: str, username: str) -> bool:
-    """Під час активної тривоги пропускаємо якщо:
-       - є офіційні фрази (ALARM_PHRASES), або
-       - є ХОЧ ОДНА загроза (THREAT_KEYWORDS), або
-       - є ХОЧ ОДНА локація (REGION_KEYWORDS),
-       - або це bro_revisor з бонус-фразою.
-    """
     if _contains_any(lower, ALARM_PHRASES):
         return True
     if _contains_any(lower, THREAT_KEYWORDS):
@@ -141,15 +136,12 @@ def _passes_prefilter_when_active(lower: str, username: str) -> bool:
     return False
 
 def _derive_flags(lower: str, username: str) -> tuple[bool, bool, bool]:
-    """Повертає (region_hit, rapid_hit, revisor_bonus) для INFO."""
     region_hit = _contains_any(lower, REGION_KEYWORDS)
     rapid_hit = _contains_any(lower, THREAT_KEYWORDS_RAPID)
     revisor_bonus = False
-
     if username == "bro_revisor" and _contains_any(lower, BRO_REVISOR_BONUS):
-        region_hit = True  # поводимось як з локальною гео-важливістю
+        region_hit = True
         revisor_bonus = True
-
     return region_hit, rapid_hit, revisor_bonus
 
 @client.on(events.NewMessage(chats=monitored_channels))
@@ -164,11 +156,9 @@ async def handle_all_messages(event):
 
     alert_active = bool(server.status.get("alert_active"))
 
-    # Неофіційні канали: до тривоги — не читаємо взагалі
     if username not in OFFICIAL_ALARM_SOURCES and not alert_active:
         return
 
-    # Тротлінг/префільтр для неофіційних під час активної тривоги
     if username not in OFFICIAL_ALARM_SOURCES:
         now = time.monotonic()
         last = _last_handled_at.get(username, 0.0)
@@ -179,26 +169,21 @@ async def handle_all_messages(event):
         if not _passes_prefilter_when_active(lower, username):
             return
 
-    # Debounce на однакові тексти/репости
     sig = hash((username, text))
     if sig in _RECENT_SIGS:
         return
     _RECENT_SIGS.add(sig)
     if len(_RECENT_SIGS) > _MAX_SIGS:
-        # безпечне "очищення": set.pop() видаляє довільний елемент — нас це влаштовує
         _RECENT_SIGS.pop()
 
-    # Класифікація (додаємо source для прозорості)
     classified = classify_message(text, url, source=username)
     if not classified:
         print(f"[TELEGRAM CHECKER] @{username} → None")
         return
 
-    # Безпека: будь-які alarm/all_clear не з офіційного знизити до info
     if classified["type"] in ("alarm", "all_clear") and username not in OFFICIAL_ALARM_SOURCES:
         classified["type"] = "info"
 
-    # Доповнюємо INFO прапорцями region_hit / rapid_hit / revisor_bonus
     if classified["type"] == "info":
         region_hit, rapid_hit, revisor_bonus = _derive_flags(lower, username)
         classified["region_hit"] = region_hit
@@ -206,7 +191,6 @@ async def handle_all_messages(event):
         if revisor_bonus:
             classified["revisor_bonus"] = True
 
-        # Якщо класифікатор не визначив threat_type, спробуємо грубо
         if not classified.get("threat_type"):
             if "ракета" in lower or "ракет" in lower:
                 classified["threat_type"] = "ракета"
@@ -215,7 +199,6 @@ async def handle_all_messages(event):
             elif _contains_any(lower, ["балістика", "баллистик", "миг", "міг", "кинжал", "искандер"]):
                 classified["threat_type"] = "балістика/МіГ"
 
-    # оновлюємо веб-статус (короткий буфер)
     server.status["last_messages"].append({
         "text": text,
         "username": username,
@@ -225,19 +208,14 @@ async def handle_all_messages(event):
     if len(server.status["last_messages"]) > 50:
         server.status["last_messages"] = server.status["last_messages"][-50:]
 
-    # у чергу для основного циклу
     classified["date"] = event.message.date.replace(tzinfo=timezone.utc)
     await message_queue.put(classified)
 
     print(f"[TELEGRAM CHECKER] @{username} → {classified}")
-    # Live-оновлення
     await server.push_update()
 
 async def start_monitoring():
-    """
-    УВАГА: НЕ стартуємо клієнт тут.
-    Клієнт стартує один раз у main.py (щоб не плодити зайві логіни).
-    """
+    """Клієнт стартує у main.py; тут лише чекаємо на дисконект."""
     await client.run_until_disconnected()
 
 async def check_telegram_channels():
@@ -245,7 +223,6 @@ async def check_telegram_channels():
         return await message_queue.get()
     return None
 
-# ⚠️ catch-up краще НЕ ВИКЛИКАТИ з main.py (зайві API-запити)
 async def fetch_last_messages(minutes: int):
     if not await client.is_user_authorized():
         print("❗ Не авторизовано для підвантаження повідомлень.")
@@ -282,7 +259,7 @@ async def fetch_last_messages(minutes: int):
                             if not cl.get("threat_type"):
                                 if "ракета" in lower or "ракет" in lower:
                                     cl["threat_type"] = "ракета"
-                                elif "শахед" in lower or "дрон" in lower or "бпла" in lower:
+                                elif "шахед" in lower or "дрон" in lower or "бпла" in lower:
                                     cl["threat_type"] = "шахед/дрон"
                                 elif _contains_any(lower, ["балістика", "баллистик", "миг", "міг", "кинжал", "искандер"]):
                                     cl["threat_type"] = "балістика/МіГ"
