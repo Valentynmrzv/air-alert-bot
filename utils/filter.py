@@ -20,19 +20,20 @@ RAPID_THREATS = [
     "пуск", "пуски", "запуск", "запуски",
 ]
 THREAT_WORDS = [
-    "шахед", "shahed", "дрон", "бпла", "ракета", "балістік", "балістик", "іскандер", "кинджал", "кинжал",
+    "шахед", "shahed", "дрон", "бпла", "ракета",
+    "балістік", "балістик", "іскандер", "кинджал", "кинжал",
 ]
 
 RE_BASE = re.compile(
-    r"(повітряна\s+тривога|відбій\s+тривоги)\s+(?:в|у)\s+([^\n\.#!\*\)]+)",
+    r"(повітряна\s+тривога|відбій(?:\s+повітряної)?\s+тривоги)\s+(?:в|у)\s+([^\n\.#!\*\)]+)",
     re.IGNORECASE | re.UNICODE,
 )
 RE_WITH_DASH = re.compile(
-    r"(повітряна\s+тривога|відбій\s+тривоги)[^\n]*?(?:—|-|–)\s*([^\n\.#!\*\)]+)",
+    r"(повітряна\s+тривога|відбій(?:\s+повітряної)?\s+тривоги)[^\n]*?(?:—|-|–)\s*([^\n\.#!\*\)]+)",
     re.IGNORECASE | re.UNICODE,
 )
 RE_LOOSE = re.compile(
-    r"(повітряна\s+тривога|відбій\s+тривоги)(?:[^\n]*?(?:в|у)\s+)?([^\n\.#!\*\)]+)",
+    r"(повітряна\s+тривога|відбій(?:\s+повітряної)?\s+тривоги)(?:[^\n]*?(?:в|у)\s+)?([^\n\.#!\*\)]+)",
     re.IGNORECASE | re.UNICODE,
 )
 
@@ -68,7 +69,7 @@ def _guess_threat(lower: str):
 def _classify_official_type(lower: str):
     if "повітряна тривога" in lower:
         return "alarm"
-    if "відбій тривоги" in lower:
+    if "відбій тривоги" in lower or "відбій повітряної тривоги" in lower:
         return "all_clear"
     return None
 
@@ -81,7 +82,7 @@ def _try_official_parse(lower: str):
         phrase = (m.group(1) or "").lower()
         raw_district = (m.group(2) or "").strip()
         district_norm = _norm_district(raw_district)
-        if "повітряна" in phrase:
+        if "повітряна" in phrase and "відбій" not in phrase:
             typ = "alarm"
         elif "відбій" in phrase:
             typ = "all_clear"

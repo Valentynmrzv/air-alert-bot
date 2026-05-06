@@ -34,6 +34,7 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
     state = load_state()
     alert_active = state.get("alert_active", False)
     threat_sent = set(state.get("threat_sent", []))
+    situation_sent = set(state.get("situation_sent", []))
 
     while True:
         msg = await tg_checker.check_telegram_channels()
@@ -57,6 +58,7 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
         region_hit = bool(msg.get("region_hit"))
         rapid_hit = bool(msg.get("rapid_hit"))
         revisor_bonus = bool(msg.get("revisor_bonus"))
+        situation_source = msg.get("situation_source")
 
         if msg["type"] in ("alarm", "all_clear"):
             if district not in ALLOWED_DISTRICTS:
@@ -95,6 +97,25 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 await send_alert_message(alert_text, notify=True, chat_id=channel_id, parse_mode="Markdown")
 
             state["threat_sent"] = list(threat_sent)
+            save_state(state)
+            continue
+
+        if msg["type"] == "situation" and msg_id not in situation_sent:
+            server.status["logs"].append(f"Обстановка: {text[:160]}")
+            if len(server.status["logs"]) > 100:
+                server.status["logs"] = server.status["logs"][-100:]
+
+            prefix = "📡 Обстановка"
+            if situation_source == "ukraine_pyxx":
+                prefix = "🔹 Зведення"
+
+            forward_text = f"{prefix}\n\n{text}"
+            if source_url:
+                forward_text += f"\n\nДжерело: {source_url}"
+            await send_alert_message(forward_text, notify=False, chat_id=channel_id, parse_mode=None)
+
+            situation_sent.add(msg_id)
+            state["situation_sent"] = list(situation_sent)
             save_state(state)
             continue
 
@@ -147,6 +168,9 @@ async def heartbeat_loop():
     """Перевірка «живості» сесії, щоб не помічати дисконект лише під час подій."""
     while True:
         try:
+            if not tg_checker.client.is_connected():
+                await asyncio.sleep(5)
+                continue
             await tg_checker.client.get_me()
         except Exception as e:
             print(f"💔 Heartbeat failed: {e}")

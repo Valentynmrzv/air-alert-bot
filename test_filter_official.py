@@ -36,3 +36,33 @@ def test_multi_district_alarm_with_bullets():
     assert result is not None
     assert result["type"] == "alarm"
     assert result["district"] == "броварський район"
+
+
+def test_single_district_all_clear():
+    text = (
+        "18:05 Відбій повітряної тривоги в Броварський район\n"
+        "Можете залишити укриття.\n"
+        "#Броварський_район"
+    )
+
+    result = classify_message(text, "https://t.me/air_alert_ua/3", source="air_alert_ua")
+
+    assert result is not None
+    assert result["type"] == "all_clear"
+    assert result["district"] == "броварський район"
+
+
+def test_multi_district_all_clear_with_hashtag_fallback():
+    text = (
+        "18:10 Відбій повітряної тривоги в \n"
+        "• Вишгородський район\n"
+        "• Броварський район\n"
+        "Можете залишити укриття.\n"
+        "#Вишгородський_район #Броварський_район"
+    )
+
+    result = classify_message(text, "https://t.me/air_alert_ua/4", source="air_alert_ua")
+
+    assert result is not None
+    assert result["type"] == "all_clear"
+    assert result["district"] == "броварський район"
