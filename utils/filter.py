@@ -1,4 +1,3 @@
-# utils/filter.py
 import re
 
 ALLOWED_DISTRICTS = {"броварський район", "київська область"}
@@ -13,18 +12,17 @@ REGION_KEYWORDS = [
     "ірпін", "буча", "гостомел", "вишнев", "васильк", "березан", "баришівк",
 ]
 RAPID_THREATS = [
-    "балістик", "баллистик",
+    "балістік", "балістик", "баллистик",
     "іскандер", "искандер",
-    "кинжал",
+    "кинджал", "кинжал",
     "миг-31", "міг-31", "миг 31", "міг 31", "mig-31", "mig 31",
     "зліт", "взлет", "старт",
     "пуск", "пуски", "запуск", "запуски",
 ]
 THREAT_WORDS = [
-    "шахед", "shahed", "дрон", "бпла", "ракета", "балістик", "іскандер", "кинжал",
+    "шахед", "shahed", "дрон", "бпла", "ракета", "балістік", "балістик", "іскандер", "кинджал", "кинжал",
 ]
 
-# ------- ОФІЦІЙНІ ПОСТИ @air_alert_ua: кілька патернів -------
 RE_BASE = re.compile(
     r"(повітряна\s+тривога|відбій\s+тривоги)\s+(?:в|у)\s+([^\n\.#!\*\)]+)",
     re.IGNORECASE | re.UNICODE,
@@ -43,24 +41,37 @@ HASHTAG_MAP = {
     "#київська_область": "київська область",
 }
 
+
 def _norm_district(d: str) -> str:
     d = (d or "").strip().lower()
     d = d.replace("м. ", "").strip()
-    # прибираємо хвости: пробіли, зірочки, хеш-символи, крапки, коми, окремі zero-width
+    d = re.sub(r"^[•\-\s]+", "", d).strip()
     d = re.sub(r"[\s\*\#\.\!\,\u200d\ufe0f]+$", "", d).strip()
     return d
+
 
 def _is_region_hit(lower: str) -> bool:
     return any(k in lower for k in REGION_KEYWORDS)
 
+
 def _is_rapid_hit(lower: str) -> bool:
     return any(k in lower for k in RAPID_THREATS)
+
 
 def _guess_threat(lower: str):
     for w in THREAT_WORDS:
         if w in lower:
             return w
     return None
+
+
+def _classify_official_type(lower: str):
+    if "повітряна тривога" in lower:
+        return "alarm"
+    if "відбій тривоги" in lower:
+        return "all_clear"
+    return None
+
 
 def _try_official_parse(lower: str):
     for rx in (RE_BASE, RE_WITH_DASH, RE_LOOSE):
@@ -79,21 +90,26 @@ def _try_official_parse(lower: str):
         return typ, district_norm
     return None
 
-def _try_hashtag_fallback(lower: str):
-    found = None
+
+def _extract_allowed_official_district(lower: str):
     for tag, norm in HASHTAG_MAP.items():
         if tag in lower:
-            found = norm
-            break
-    if not found:
+            return norm
+
+    for district in ALLOWED_DISTRICTS:
+        if district in lower:
+            return district
+
+    return None
+
+
+def _try_hashtag_fallback(lower: str):
+    district = _extract_allowed_official_district(lower)
+    typ = _classify_official_type(lower)
+    if not district or not typ:
         return None
-    if "повітряна тривога" in lower:
-        typ = "alarm"
-    elif "відбій тривоги" in lower:
-        typ = "all_clear"
-    else:
-        return None
-    return typ, found
+    return typ, district
+
 
 def classify_message(text: str, url: str, source: str | None = None):
     if not text:
@@ -101,16 +117,38 @@ def classify_message(text: str, url: str, source: str | None = None):
 
     lower = text.lower()
 
-    # 1) Офіційний канал
     if source == "air_alert_ua":
-        parsed = _try_official_parse(lower) or _try_hashtag_fallback(lower)
+        parsed = _try_official_parse(lower)
+        if parsed:
+            typ, district_norm = parsed
+            if district_norm in ALLOWED_DISTRICTS:
+                return {
+                    "district": district_norm,
+                    "text": text,
+                    "url": url,
+                    "id": hash(text + url),
+                    "type": typ,
+                }
+
+            fallback_district = _extract_allowed_official_district(lower)
+            if fallback_district:
+                return {
+                    "district": fallback_district,
+                    "text": text,
+                    "url": url,
+                    "id": hash(text + url),
+                    "type": typ,
+                }
+
+            print(f"[FILTER DEBUG] Official other district: '{district_norm}'")
+            return None
+
+        parsed = _try_hashtag_fallback(lower)
         if not parsed:
             print(f"[FILTER DEBUG] Official miss: {text[:180].replace(chr(10), ' ')}")
             return None
+
         typ, district_norm = parsed
-        if district_norm not in ALLOWED_DISTRICTS:
-            print(f"[FILTER DEBUG] Official other district: '{district_norm}'")
-            return None
         return {
             "district": district_norm,
             "text": text,
@@ -119,7 +157,6 @@ def classify_message(text: str, url: str, source: str | None = None):
             "type": typ,
         }
 
-    # 2) Неофіційні → info
     region_hit = _is_region_hit(lower)
     rapid_hit = _is_rapid_hit(lower)
     threat = _guess_threat(lower)
