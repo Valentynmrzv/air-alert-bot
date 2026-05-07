@@ -44,7 +44,10 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
     state = load_state()
     alert_active = state.get("alert_active", False)
     threat_sent = set(state.get("threat_sent", []))
-    situation_sent = set(state.get("situation_sent", []))
+    
+    # Використовуємо список для збереження порядку і set для швидкого пошуку
+    situation_list = state.get("situation_sent", [])
+    situation_sent = set(situation_list)
 
     while True:
         msg = await tg_checker.check_telegram_channels()
@@ -83,10 +86,11 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 if len(server.status["logs"]) > 100:
                     server.status["logs"] = server.status["logs"][-100:]
 
+                # HTML форматування
                 alert_text = (
-                    f"🚨 Повітряна тривога — {district.title()}!\n"
+                    f"🚨 <b>Повітряна тривога — {district.title()}!</b>\n"
                     + (f"• Можлива загроза: {threat}\n" if threat else "")
-                    + (f"• Джерело: {source_url}\n" if source_url else "")
+                    + (f"• <a href='{source_url}'>Джерело</a>\n" if source_url else "")
                     + "Будьте в укриттях."
                 )
 
@@ -94,7 +98,7 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                     alert_text,
                     notify=True,
                     chat_id=channel_id,
-                    parse_mode="Markdown",
+                    parse_mode="HTML",
                 )
                 asyncio.create_task(send_alarm_screenshot_followup(alert_text, channel_id))
 
@@ -106,15 +110,16 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 if len(server.status["logs"]) > 100:
                     server.status["logs"] = server.status["logs"][-100:]
 
+                # HTML форматування
                 alert_text = (
-                    f"✅ Відбій тривоги — {district.title()}!\n"
-                    + (f"• Джерело: {source_url}" if source_url else "")
+                    f"✅ <b>Відбій тривоги — {district.title()}!</b>\n"
+                    + (f"• <a href='{source_url}'>Джерело</a>" if source_url else "")
                 )
                 await send_alert_message(
                     alert_text,
                     notify=True,
                     chat_id=channel_id,
-                    parse_mode="Markdown",
+                    parse_mode="HTML",
                 )
 
             state["threat_sent"] = list(threat_sent)
@@ -141,8 +146,13 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 parse_mode=None,
             )
 
-            situation_sent.add(msg_id)
-            state["situation_sent"] = list(situation_sent)
+            # Захист від переповнення файлу state.json
+            situation_list.append(msg_id)
+            if len(situation_list) > 50:
+                situation_list = situation_list[-50:]  # Залишаємо тільки останні 50
+            
+            situation_sent = set(situation_list)
+            state["situation_sent"] = situation_list
             save_state(state)
             continue
 
@@ -250,7 +260,6 @@ async def main():
 
     await asyncio.gather(
         run_client_forever(),
-        # РЯДОК ВИДАЛЕНО: tg_checker.official_alarm_poll_loop() тепер запускається автоматично в telegram_checker.py
         monitor_loop(channel_id, user_chat_id, start_time),
         uptime_loop(user_chat_id, start_time),
         heartbeat_loop(),

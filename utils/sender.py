@@ -99,7 +99,7 @@ async def send_alert_with_screenshot(caption, screenshot_path, chat_id=None):
                 data.add_field('chat_id', str(target_chat_id))
                 data.add_field('caption', caption)
                 data.add_field('photo', image)
-                data.add_field('parse_mode', 'Markdown')
+                data.add_field('parse_mode', 'HTML')
 
                 async with session.post(url, data=data, timeout=20) as response:
                     if response.status != 200:
