@@ -42,6 +42,8 @@ client = TelegramClient(
 
 message_queue = asyncio.Queue()
 catch_up_messages = []
+_official_entity = None
+_last_official_message_id = 0
 
 CHANNELS_PATH = BASE_DIR / "alert_sources" / "channels.json"
 with open(CHANNELS_PATH, "r", encoding="utf-8") as f:
@@ -163,6 +165,23 @@ def _enrich_info_message(classified: dict, lower: str, username: str):
             classified["threat_type"] = "балістика/МіГ"
 
 
+async def _queue_classified_message(classified: dict, text: str, username: str, url: str, msg_date):
+    server.status["last_messages"].append({
+        "text": text,
+        "username": username,
+        "url": url,
+        "date": msg_date.isoformat(),
+    })
+    if len(server.status["last_messages"]) > 50:
+        server.status["last_messages"] = server.status["last_messages"][-50:]
+
+    classified["date"] = msg_date.replace(tzinfo=timezone.utc)
+    await message_queue.put(classified)
+
+    print(f"[TELEGRAM CHECKER] @{username} -> {classified}")
+    await server.push_update()
+
+
 @client.on(events.NewMessage(chats=monitored_channels))
 async def handle_all_messages(event):
     username = getattr(event.chat, "username", None)
@@ -213,20 +232,66 @@ async def handle_all_messages(event):
     if classified["type"] == "info":
         _enrich_info_message(classified, lower, username)
 
-    server.status["last_messages"].append({
-        "text": text,
-        "username": username,
-        "url": url,
-        "date": event.message.date.isoformat(),
-    })
-    if len(server.status["last_messages"]) > 50:
-        server.status["last_messages"] = server.status["last_messages"][-50:]
+    await _queue_classified_message(
+        classified,
+        text,
+        username,
+        url,
+        event.message.date,
+    )
 
-    classified["date"] = event.message.date.replace(tzinfo=timezone.utc)
-    await message_queue.put(classified)
 
-    print(f"[TELEGRAM CHECKER] @{username} -> {classified}")
-    await server.push_update()
+async def official_alarm_poll_loop():
+    global _official_entity, _last_official_message_id
+
+    while True:
+        try:
+            if not client.is_connected():
+                await asyncio.sleep(3)
+                continue
+
+            if _official_entity is None:
+                _official_entity = await client.get_entity("air_alert_ua")
+
+            latest = await client.get_messages(_official_entity, limit=1)
+            if not latest:
+                await asyncio.sleep(5)
+                continue
+
+            msg = latest[0]
+            if not msg or not msg.id:
+                await asyncio.sleep(5)
+                continue
+
+            if msg.id <= _last_official_message_id:
+                await asyncio.sleep(5)
+                continue
+
+            _last_official_message_id = msg.id
+            text = msg.text or ""
+            url = f"https://t.me/air_alert_ua/{msg.id}"
+            classified = classify_message(text, url, source="air_alert_ua")
+            if classified:
+                sig = hash(("air_alert_ua", text))
+                if sig not in _RECENT_SIGS:
+                    _RECENT_SIGS.add(sig)
+                    if len(_RECENT_SIGS) > _MAX_SIGS:
+                        _RECENT_SIGS.pop()
+                    print(f"[OFFICIAL POLL] picked up message {msg.id}")
+                    await _queue_classified_message(
+                        classified,
+                        text,
+                        "air_alert_ua",
+                        url,
+                        msg.date,
+                    )
+        except FloodWaitError as e:
+            print(f"[OFFICIAL POLL] FloodWait {e.seconds}s")
+            await asyncio.sleep(e.seconds + 1)
+        except Exception as e:
+            print(f"[OFFICIAL POLL] error: {e}")
+
+        await asyncio.sleep(5)
 
 
 async def start_monitoring():
