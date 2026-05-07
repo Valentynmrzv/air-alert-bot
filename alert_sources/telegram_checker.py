@@ -49,7 +49,7 @@ with open(CHANNELS_PATH, "r", encoding="utf-8") as f:
 print(f"[CFG] Loaded {len(monitored_channels)} channels from {CHANNELS_PATH}")
 
 OFFICIAL_ALARM_SOURCES = {"air_alert_ua"}
-SITUATION_SOURCES = {"war_monitor", "ukraine_pyxx"}
+SITUATION_SOURCES = {"war_monitor", "ukraine_pyxx", "cyyiiv_naorym"}
 
 _RECENT_SIGS = set()
 _MAX_SIGS = 500
@@ -108,12 +108,20 @@ def _contains_any(lower: str, keys: list[str] | set[str]) -> bool:
 
 def _is_situation_update(username: str, lower: str) -> bool:
     if username == "war_monitor":
-        return "обстановка станом на" in lower and "#обстановка" in lower
-    if username == "ukraine_pyxx":
         return (
-            "оцінка діяльності ворожої авіації та флоту станом на" in lower
-            or "#зведення" in lower
+            ("обстановка" in lower and "станом на" in lower)
+            or "#обстановка" in lower
+            or "стратегічна авіація" in lower and "флот" in lower
         )
+
+    if username in {"ukraine_pyxx", "cyyiiv_naorym"}:
+        return (
+            "оцінка діяльності" in lower
+            or "#зведення" in lower
+            or "стратегічна авіація" in lower and "військово-транспортна авіація" in lower
+            or "міг-31" in lower and "чорному морі" in lower
+        )
+
     return False
 
 
@@ -167,6 +175,9 @@ async def handle_all_messages(event):
 
     alert_active = bool(server.status.get("alert_active"))
     is_situation_update = _is_situation_update(username, lower)
+
+    if username in SITUATION_SOURCES and not is_situation_update:
+        print(f"[SITUATION DEBUG] @{username} skipped: {text[:180].replace(chr(10), ' ')}")
 
     if username not in OFFICIAL_ALARM_SOURCES and not alert_active and not is_situation_update:
         return
@@ -267,6 +278,7 @@ async def fetch_last_messages(minutes: int):
 
                 cl["date"] = msg.date.replace(tzinfo=timezone.utc)
                 catch_up_messages.append(cl)
+
             await asyncio.sleep(0.3)
         except Exception as e:
             print(f"Failed to fetch messages from {username}: {e}")

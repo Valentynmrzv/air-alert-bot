@@ -24,31 +24,10 @@ THREAT_WORDS = [
     "балістік", "балістик", "іскандер", "кинджал", "кинжал",
 ]
 
-RE_BASE = re.compile(
-    r"(повітряна\s+тривога|відбій(?:\s+повітряної)?\s+тривоги)\s+(?:в|у)\s+([^\n\.#!\*\)]+)",
-    re.IGNORECASE | re.UNICODE,
-)
-RE_WITH_DASH = re.compile(
-    r"(повітряна\s+тривога|відбій(?:\s+повітряної)?\s+тривоги)[^\n]*?(?:—|-|–)\s*([^\n\.#!\*\)]+)",
-    re.IGNORECASE | re.UNICODE,
-)
-RE_LOOSE = re.compile(
-    r"(повітряна\s+тривога|відбій(?:\s+повітряної)?\s+тривоги)(?:[^\n]*?(?:в|у)\s+)?([^\n\.#!\*\)]+)",
-    re.IGNORECASE | re.UNICODE,
-)
-
 HASHTAG_MAP = {
     "#броварський_район": "броварський район",
     "#київська_область": "київська область",
 }
-
-
-def _norm_district(d: str) -> str:
-    d = (d or "").strip().lower()
-    d = d.replace("м. ", "").strip()
-    d = re.sub(r"^[•\-\s]+", "", d).strip()
-    d = re.sub(r"[\s\*\#\.\!\,\u200d\ufe0f]+$", "", d).strip()
-    return d
 
 
 def _is_region_hit(lower: str) -> bool:
@@ -74,24 +53,6 @@ def _classify_official_type(lower: str):
     return None
 
 
-def _try_official_parse(lower: str):
-    for rx in (RE_BASE, RE_WITH_DASH, RE_LOOSE):
-        m = rx.search(lower)
-        if not m:
-            continue
-        phrase = (m.group(1) or "").lower()
-        raw_district = (m.group(2) or "").strip()
-        district_norm = _norm_district(raw_district)
-        if "повітряна" in phrase and "відбій" not in phrase:
-            typ = "alarm"
-        elif "відбій" in phrase:
-            typ = "all_clear"
-        else:
-            continue
-        return typ, district_norm
-    return None
-
-
 def _extract_allowed_official_district(lower: str):
     for tag, norm in HASHTAG_MAP.items():
         if tag in lower:
@@ -104,14 +65,6 @@ def _extract_allowed_official_district(lower: str):
     return None
 
 
-def _try_hashtag_fallback(lower: str):
-    district = _extract_allowed_official_district(lower)
-    typ = _classify_official_type(lower)
-    if not district or not typ:
-        return None
-    return typ, district
-
-
 def classify_message(text: str, url: str, source: str | None = None):
     if not text:
         return None
@@ -119,44 +72,24 @@ def classify_message(text: str, url: str, source: str | None = None):
     lower = text.lower()
 
     if source == "air_alert_ua":
-        parsed = _try_official_parse(lower)
-        if parsed:
-            typ, district_norm = parsed
-            if district_norm in ALLOWED_DISTRICTS:
-                return {
-                    "district": district_norm,
-                    "text": text,
-                    "url": url,
-                    "id": hash(text + url),
-                    "type": typ,
-                }
+        typ = _classify_official_type(lower)
+        district = _extract_allowed_official_district(lower)
 
-            fallback_district = _extract_allowed_official_district(lower)
-            if fallback_district:
-                return {
-                    "district": fallback_district,
-                    "text": text,
-                    "url": url,
-                    "id": hash(text + url),
-                    "type": typ,
-                }
+        if typ and district:
+            return {
+                "district": district,
+                "text": text,
+                "url": url,
+                "id": hash(text + url),
+                "type": typ,
+            }
 
-            print(f"[FILTER DEBUG] Official other district: '{district_norm}'")
+        if typ and not district:
+            print(f"[FILTER DEBUG] Official other district: {text[:180].replace(chr(10), ' ')}")
             return None
 
-        parsed = _try_hashtag_fallback(lower)
-        if not parsed:
-            print(f"[FILTER DEBUG] Official miss: {text[:180].replace(chr(10), ' ')}")
-            return None
-
-        typ, district_norm = parsed
-        return {
-            "district": district_norm,
-            "text": text,
-            "url": url,
-            "id": hash(text + url),
-            "type": typ,
-        }
+        print(f"[FILTER DEBUG] Official miss: {text[:180].replace(chr(10), ' ')}")
+        return None
 
     region_hit = _is_region_hit(lower)
     rapid_hit = _is_rapid_hit(lower)
