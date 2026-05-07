@@ -250,12 +250,11 @@ async def main():
 
     await asyncio.gather(
         run_client_forever(),
-        tg_checker.official_alarm_poll_loop(),
+        # РЯДОК ВИДАЛЕНО: tg_checker.official_alarm_poll_loop() тепер запускається автоматично в telegram_checker.py
         monitor_loop(channel_id, user_chat_id, start_time),
         uptime_loop(user_chat_id, start_time),
         heartbeat_loop(),
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())

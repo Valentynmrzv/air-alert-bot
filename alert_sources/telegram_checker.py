@@ -190,46 +190,49 @@ async def handle_all_messages(event):
 
     text = event.message.text or ""
     lower = text.lower()
-    url = f"https://t.me/{username}/{event.message.id}"
+    msg_id = event.message.id
+    url = f"https://t.me/{username}/{msg_id}"
 
-    alert_active = bool(server.status.get("alert_active"))
-    is_situation_update = _is_situation_update(username, lower)
+    is_situation = _is_situation_update(username, lower)
 
-    if username in SITUATION_SOURCES and not is_situation_update:
-        print(f"[SITUATION DEBUG] @{username} skipped: {text[:180].replace(chr(10), ' ')}")
-
-    if username not in OFFICIAL_ALARM_SOURCES and not alert_active and not is_situation_update:
-        return
-
+    # 1. Тротлінг та фільтрація тільки для звичайних інфо-повідомлень (зведення пропускаємо)
     if username not in OFFICIAL_ALARM_SOURCES:
-        now = time.monotonic()
-        last = _last_handled_at.get(username, 0.0)
-        if (now - last) < _THROTTLE_SECONDS:
-            return
-        _last_handled_at[username] = now
+        if not is_situation:
+            if not _passes_prefilter_when_active(lower, username):
+                return
+            
+            now = time.monotonic()
+            last = _last_handled_at.get(username, 0.0)
+            if (now - last) < _THROTTLE_SECONDS:
+                return
+            _last_handled_at[username] = now
 
-        if not is_situation_update and not _passes_prefilter_when_active(lower, username):
-            return
-
-    sig = hash((username, text))
+    # 2. Хешування З ДОДАВАННЯМ ID повідомлення (вирішує проблему пропуску відбоїв)
+    sig = hash((username, text, msg_id))
     if sig in _RECENT_SIGS:
         return
     _RECENT_SIGS.add(sig)
     if len(_RECENT_SIGS) > _MAX_SIGS:
         _RECENT_SIGS.pop()
 
+    # 3. Класифікація з обходом для зведень
     classified = classify_message(text, url, source=username)
-    if not classified:
-        print(f"[TELEGRAM CHECKER] @{username} -> None")
-        return
-
-    if is_situation_update:
+    
+    if is_situation:
+        if not classified:
+            classified = {"source": username, "text": text, "url": url}
         classified["type"] = "situation"
         classified["situation_source"] = username
-    elif classified["type"] in ("alarm", "all_clear") and username not in OFFICIAL_ALARM_SOURCES:
+    else:
+        if not classified:
+            print(f"[TELEGRAM CHECKER] @{username} -> None (filtered by classifier)")
+            return
+
+    # 4. Коригування типів для неофіційних каналів
+    if classified.get("type") in ("alarm", "all_clear") and username not in OFFICIAL_ALARM_SOURCES:
         classified["type"] = "info"
 
-    if classified["type"] == "info":
+    if classified.get("type") == "info":
         _enrich_info_message(classified, lower, username)
 
     await _queue_classified_message(
@@ -270,9 +273,11 @@ async def official_alarm_poll_loop():
             _last_official_message_id = msg.id
             text = msg.text or ""
             url = f"https://t.me/air_alert_ua/{msg.id}"
+            
             classified = classify_message(text, url, source="air_alert_ua")
             if classified:
-                sig = hash(("air_alert_ua", text))
+                # ТУТ ТАКОЖ ДОДАНО msg.id ДЛЯ СИНХРОННОСТІ З ОСНОВНИМ ЦИКЛОМ
+                sig = hash(("air_alert_ua", text, msg.id)) 
                 if sig not in _RECENT_SIGS:
                     _RECENT_SIGS.add(sig)
                     if len(_RECENT_SIGS) > _MAX_SIGS:
@@ -295,6 +300,8 @@ async def official_alarm_poll_loop():
 
 
 async def start_monitoring():
+    # Запуск фонового пулера офіційних тривог
+    asyncio.create_task(official_alarm_poll_loop())
     await client.run_until_disconnected()
 
 
@@ -327,18 +334,25 @@ async def fetch_last_messages(minutes: int):
                     continue
 
                 lower = (msg.text or "").lower()
-                cl = classify_message(msg.text or "", f"https://t.me/{username}/{msg.id}", source=username)
-                if not cl:
-                    continue
-
-                is_situation_update = _is_situation_update(username, lower)
-                if is_situation_update:
+                url = f"https://t.me/{username}/{msg.id}"
+                cl = classify_message(msg.text or "", url, source=username)
+                
+                is_situation = _is_situation_update(username, lower)
+                
+                # Обхід класифікатора для зведень в історії
+                if is_situation:
+                    if not cl:
+                        cl = {"source": username, "text": msg.text or "", "url": url}
                     cl["type"] = "situation"
                     cl["situation_source"] = username
-                elif cl["type"] in ("alarm", "all_clear") and username not in OFFICIAL_ALARM_SOURCES:
+                else:
+                    if not cl:
+                        continue
+
+                if cl.get("type") in ("alarm", "all_clear") and username not in OFFICIAL_ALARM_SOURCES:
                     cl["type"] = "info"
 
-                if cl["type"] == "info":
+                if cl.get("type") == "info":
                     _enrich_info_message(cl, lower, username)
 
                 cl["date"] = msg.date.replace(tzinfo=timezone.utc)
