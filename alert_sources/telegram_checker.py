@@ -51,7 +51,7 @@ with open(CHANNELS_PATH, "r", encoding="utf-8") as f:
 print(f"[CFG] Loaded {len(monitored_channels)} channels from {CHANNELS_PATH}")
 
 OFFICIAL_ALARM_SOURCES = {"air_alert_ua"}
-SITUATION_SOURCES = {"war_monitor", "ukraine_pyxx", "cyyiiv_naorym"}
+SITUATION_SOURCES = {"war_monitor", "cyyiiv_naorym"}
 
 _RECENT_SIGS = set()
 _MAX_SIGS = 500
@@ -116,7 +116,7 @@ def _is_situation_update(username: str, lower: str) -> bool:
             or "стратегічна авіація" in lower and "флот" in lower
         )
 
-    if username in {"ukraine_pyxx", "cyyiiv_naorym"}:
+    if username in {"cyyiiv_naorym"}:
         return (
             "оцінка діяльності" in lower
             or "#зведення" in lower
