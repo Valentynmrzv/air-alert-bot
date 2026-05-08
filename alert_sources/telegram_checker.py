@@ -50,8 +50,12 @@ with open(CHANNELS_PATH, "r", encoding="utf-8") as f:
     monitored_channels = json.load(f)
 print(f"[CFG] Loaded {len(monitored_channels)} channels from {CHANNELS_PATH}")
 
+# Створюємо set для швидкого та безпечного пошуку
+monitored_channels_set = set(monitored_channels)
+
 OFFICIAL_ALARM_SOURCES = {"air_alert_ua"}
-SITUATION_SOURCES = {"war_monitor", "cyyiiv_naorym"}
+# Додаємо обидва варіанти назви каналу сюди
+SITUATION_SOURCES = {"war_monitor", "ukraine_pyxx", "cyyiiv_naorym"}
 
 _RECENT_SIGS = set()
 _MAX_SIGS = 500
@@ -116,7 +120,8 @@ def _is_situation_update(username: str, lower: str) -> bool:
             or "стратегічна авіація" in lower and "флот" in lower
         )
 
-    if username in {"cyyiiv_naorym"}:
+    # Перевіряємо обидва юзернейми
+    if username in {"ukraine_pyxx", "cyyiiv_naorym"}:
         return (
             "оцінка діяльності" in lower
             or "#зведення" in lower
@@ -182,10 +187,13 @@ async def _queue_classified_message(classified: dict, text: str, username: str, 
     await server.push_update()
 
 
-@client.on(events.NewMessage(chats=monitored_channels))
+# Знімаємо `chats=`, тепер ловимо все і фільтруємо вручну
+@client.on(events.NewMessage())
 async def handle_all_messages(event):
     username = getattr(event.chat, "username", None)
-    if not username:
+    
+    # Власний фільтр: ігноруємо все, чого немає у нашому списку
+    if not username or username not in monitored_channels_set:
         return
 
     text = event.message.text or ""
@@ -276,7 +284,6 @@ async def official_alarm_poll_loop():
             
             classified = classify_message(text, url, source="air_alert_ua")
             if classified:
-                # ТУТ ТАКОЖ ДОДАНО msg.id ДЛЯ СИНХРОННОСТІ З ОСНОВНИМ ЦИКЛОМ
                 sig = hash(("air_alert_ua", text, msg.id)) 
                 if sig not in _RECENT_SIGS:
                     _RECENT_SIGS.add(sig)
@@ -359,6 +366,9 @@ async def fetch_last_messages(minutes: int):
                 catch_up_messages.append(cl)
 
             await asyncio.sleep(0.3)
+        # Додаємо обробку ValueError для відсутніх каналів
+        except ValueError:
+            print(f"⚠️ Канал {username} не знайдено під час завантаження історії.")
         except Exception as e:
             print(f"Failed to fetch messages from {username}: {e}")
 

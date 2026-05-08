@@ -132,7 +132,8 @@ async def monitor_loop(channel_id: int, user_chat_id: int, start_time: datetime)
                 server.status["logs"] = server.status["logs"][-100:]
 
             prefix = "📡 Обстановка"
-            if situation_source == "cyyiiv_naorym":
+            # Перевіряємо обидва
+            if situation_source in {"ukraine_pyxx", "cyyiiv_naorym"}:
                 prefix = "🔹 Зведення"
 
             forward_text = f"{prefix}\n\n{text}"
