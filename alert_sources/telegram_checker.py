@@ -54,7 +54,6 @@ print(f"[CFG] Loaded {len(monitored_channels)} channels from {CHANNELS_PATH}")
 monitored_channels_set = set(monitored_channels)
 
 OFFICIAL_ALARM_SOURCES = {"air_alert_ua"}
-# Додаємо обидва варіанти назви каналу сюди
 SITUATION_SOURCES = {"war_monitor", "ukraine_pyxx", "cyyiiv_naorym"}
 
 _RECENT_SIGS = set()
@@ -167,38 +166,49 @@ async def _queue_classified_message(classified: dict, text: str, username: str, 
     await server.push_update()
 
 
-# Знімаємо `chats=`, тепер ловимо все і фільтруємо вручну
 @client.on(events.NewMessage())
 async def handle_all_messages(event):
-    original_username = getattr(event.chat, "username", None)
-    
-    # 1. СТРОГИЙ ФІЛЬТР: Якщо каналу немає у файлі channels.json, відкидаємо одразу!
-    if not original_username or original_username not in monitored_channels_set:
-        return
-
     text = event.message.text or ""
+    if not text:
+        return
+        
     lower = text.lower()
     msg_id = event.message.id
-    
+
+    # Надійно отримуємо дані про чат (змушуємо Telethon подивитися в базу)
+    try:
+        chat = await event.get_chat()
+        original_username = getattr(chat, "username", None)
+    except Exception:
+        original_username = None
+        
     is_situation = False
     username = original_username
     
-    # 2. БРОНЕБІЙНЕ ТА БЕЗПЕЧНЕ РОЗПІЗНАВАННЯ ЗВЕДЕНЬ
-    # Ловимо тільки з потрібних каналів АБО з твого тестового valentyn_mrzv
-    if original_username in {"ukraine_pyxx", "cyyiiv_naorym", "valentyn_mrzv"}:
-        if "оцінка діяльності" in lower and "#зведення" in lower:
-            is_situation = True
-            username = "ukraine_pyxx"  # Підставляємо цей юзернейм для main.py (префікс "🔹 Зведення")
+    # 1. БРОНЕБІЙНИЙ ФІЛЬТР ЗА ТЕКСТОМ (для зведень)
+    # Перевіряємо текст ДО строгих фільтрів. Працює, навіть якщо канал став приватним.
+    if "оцінка діяльності" in lower and "#зведення" in lower:
+        is_situation = True
+        username = "ukraine_pyxx"  
+    elif ("обстановка" in lower and "станом на" in lower) or "#обстановка" in lower:
+        is_situation = True
+        username = "war_monitor"   
 
-    if original_username in {"war_monitor", "valentyn_mrzv"}:
-        if ("обстановка" in lower and "станом на" in lower) or "#обстановка" in lower:
-            is_situation = True
-            username = "war_monitor"   # Підставляємо цей юзернейм для main.py (префікс "📡 Обстановка")
+    # 2. СТРОГИЙ ФІЛЬТР для звичайних повідомлень
+    # Відкидаємо лише тоді, коли це НЕ зведення, а каналу немає у нашому списку
+    if not is_situation:
+        if not original_username or original_username not in monitored_channels_set:
+            return
 
-    # 3. Формуємо правильне посилання
-    url = f"https://t.me/{original_username}/{msg_id}"
+    # 3. Формуємо посилання
+    if not original_username:
+        # Якщо канал приватний, робимо закрите посилання
+        chat_id = str(event.chat_id).replace("-100", "")
+        url = f"https://t.me/c/{chat_id}/{msg_id}"
+    else:
+        url = f"https://t.me/{original_username}/{msg_id}"
 
-    # 4. Тротлінг та фільтрація тільки для звичайних інфо-повідомлень (зведення пропускаємо)
+    # 4. Тротлінг та фільтрація...
     if username not in OFFICIAL_ALARM_SOURCES:
         if not is_situation:
             if not _passes_prefilter_when_active(lower, username):
@@ -241,8 +251,8 @@ async def handle_all_messages(event):
     await _queue_classified_message(
         classified,
         text,
-        username, # Передаємо "фейковий" юзернейм, щоб спрацювала логіка в main.py
-        url,      # Передаємо реальне посилання на пост
+        username, 
+        url,      
         event.message.date,
     )
 
@@ -302,6 +312,14 @@ async def official_alarm_poll_loop():
 
 
 async def start_monitoring():
+    print("⏳ Кешування каналів для стабільної роботи...")
+    # Цей цикл змушує Telethon запам'ятати юзернейми в пам'ять одразу при старті
+    for username in monitored_channels_set:
+        try:
+            await client.get_entity(username)
+        except Exception as e:
+            print(f"⚠️ Не вдалося знайти канал {username} (можливо він став приватним): {e}")
+            
     # Запуск фонового пулера офіційних тривог
     asyncio.create_task(official_alarm_poll_loop())
     await client.run_until_disconnected()
@@ -314,7 +332,6 @@ async def check_telegram_channels():
 
 
 async def fetch_last_messages(minutes: int):
-    # Цей функціонал наразі не використовується, тому залишаємо як є
     pass
 
 async def get_catch_up_messages():
