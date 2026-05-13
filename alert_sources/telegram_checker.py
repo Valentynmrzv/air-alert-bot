@@ -61,47 +61,59 @@ _THROTTLE_SECONDS = 10.0
 _last_handled_at: dict[str, float] = {}
 
 ALARM_PHRASES = [
-    "повітряна тривога", "відбій тривоги", "відбій повітряної тривоги",
-    "воздушная тревога", "отбой тревоги",
+    "повітряна тривога",
+    "відбій тривоги",
+    "відбій повітряної тривоги",
+    "воздушная тревога",
+    "отбой тревоги",
 ]
 
 THREAT_KEYWORDS = [
-    "шахед", "шахеди", "shahed", "шahed", "мопед", "мопеди",
-    "дрон", "дрони", "бпла", "безпілотник", "безпілотники",
-    "ракета", "ракети", "ракетн",
-    "іскандер", "кинджал", "калібр",
-    "балістика", "балістичн",
+    "шахед", "шахеди", "shahed", "мопед", "мопеди",
+    "дрон", "дрони", "бпла", "безпілот", "безпілотник",
+    "ракета", "ракети", "ракетн", "крилат",
+    "іскандер", "искандер", "кинджал", "калібр",
+    "баліст", "баллист",
     "пуск", "пуски", "запуск", "запуски",
-    "зліт", "зльот", "взлёт", "взлет",
+    "зліт", "взлёт", "взлет", "старт",
     "авіація", "авиация",
-    "удар", "удари", "обстріл", "обстріли",
-    "обстрел", "обстрелы",
-    "вибух", "вибухи", "взрыв", "взрывы",
-    "приліт", "прильот", "прильоти", "прилет", "прилеты",
+    "удар", "удари", "обстріл", "обстріли", "обстрел",
+    "вибух", "вибухи", "взрыв", "приліт", "приліт", "влучан",
     "сирена", "небезпека", "загроза", "опасность", "угроза",
-    "🛵", "🚀", "💥", "✈️", "💣", "🛩️", "🎯", "🧨", "🚨", "🔥",
+    "ппо", "пво",
 ]
 
 THREAT_KEYWORDS_RAPID = [
-    "балістика", "балістичн", "баллистик",
-    "міг-31", "миг-31", "міг31", "миг31", "міг", "миг",
-    "кинджал", "искандер",
+    "баліст", "баллист",
+    "міг-31", "миг-31", "міг 31", "миг 31", "mig-31", "mig 31", "міг", "миг",
+    "кинджал", "іскандер", "искандер",
     "пуск", "пуски", "запуск", "запуски", "старт",
+    "зліт", "взлёт", "взлет",
+    "ппо", "пво",
 ]
 
 REGION_KEYWORDS = [
-    "бровар", "бровари", "броварськ",
-    "київська область", "київщина", "київ",
-    "княжич", "требух", "калинівк", "велика димер", "мала димер",
-    "богданівк", "красилівк", "погреб", "зазим", "літк", "пухівк",
-    "рожн", "світильн", "семиполк", "квітнев", "перемог", "гогол", "калит",
-    "бориспіл", "троєщин", "лісов", "дарниц", "вишгород", "обух",
-    "ірпін", "буча", "гостомел", "вишнев", "васильк", "березан", "баришівк",
-    "киев", "киевская область", "броварск", "бровары",
+    "бровари", "броварський", "броварського", "броварщин",
+    "київщина", "київська область", "київ",
+    "княжичі", "требухів", "калинівка", "велика димерка", "мала димерка",
+    "богданівка", "красилівка", "погреби", "зазим'я", "зазимя", "літки", "литки", "пухівка",
+    "рожни", "світильня", "семиполки", "квітневе", "перемога", "гоголів", "калита",
+    "русанів", "русанов", "русанове", "плоске", "шевченкове", "заворичі",
+    "бориспіль", "березань", "баришівк", "баришевк", "вишгород", "обухів",
+    "ірпін", "буча", "гостомел", "вишневе", "васильків",
 ]
 
 BRO_REVISOR_BONUS = {
-    "на нас", "не летить", "летить", "не фіксується", "дорозвідка", "ппо",
+    "на нас", "не летить", "летить", "не фіксується", "дорозвідка", "ппо", "пво",
+    "над нами", "по нам", "в наш бік", "в сторону броварів", "курс на бровари",
+}
+
+BRO_REVISOR_NOISE = {
+    "instagram", "youtube", "youtu.be", "facebook",
+    "реклама", "підпис", "підписатися", "підписуй",
+    "мерседес", "автомобіл", "пожежн", "громад", "партнер",
+    "дякуємо", "ініціатив", "передано", "отримано", "відео",
+    "гуманітар", "благодійн", "відкритт", "привітання",
 }
 
 
@@ -114,39 +126,61 @@ def _is_situation_update(username: str, lower: str) -> bool:
         return (
             ("обстановка" in lower and "станом на" in lower)
             or "#обстановка" in lower
-            or "стратегічна авіація" in lower and "флот" in lower
+            or ("стратегічна авіація" in lower and "флот" in lower)
         )
 
-    if username in {"ukraine_pyxx", "cyyiiv_naorym"}:
+    if username in {"ukraine_pyxx", "cyyiiv_naorym", "valentyn_mrzv"}:
         return (
             "оцінка діяльності" in lower
             or "#зведення" in lower
-            or "стратегічна авіація" in lower and "військово-транспортна авіація" in lower
-            or "міг-31" in lower and "чорному морі" in lower
+            or "#обстановка" in lower
+            or ("стратегічна авіація" in lower and "військово-транспортна авіація" in lower)
+            or ("міг-31" in lower and "чорному морі" in lower)
+            or ("обстановка станом на" in lower)
         )
 
     return False
 
 
+def _is_bro_revisor_noise(lower: str) -> bool:
+    return _contains_any(lower, BRO_REVISOR_NOISE)
+
+
 def _passes_prefilter_when_active(lower: str, username: str) -> bool:
+    if username == "bro_revisor":
+        if _is_bro_revisor_noise(lower):
+            return False
+        if _contains_any(lower, ALARM_PHRASES):
+            return True
+        if _contains_any(lower, THREAT_KEYWORDS):
+            return True
+        if _contains_any(lower, BRO_REVISOR_BONUS):
+            return True
+        if _contains_any(lower, REGION_KEYWORDS) and _contains_any(lower, THREAT_KEYWORDS):
+            return True
+        return False
+
     if _contains_any(lower, ALARM_PHRASES):
         return True
     if _contains_any(lower, THREAT_KEYWORDS):
         return True
     if _contains_any(lower, REGION_KEYWORDS):
         return True
-    if username == "bro_revisor" and _contains_any(lower, BRO_REVISOR_BONUS):
-        return True
     return False
 
 
 def _derive_flags(lower: str, username: str) -> tuple[bool, bool, bool]:
+    if username == "bro_revisor" and _is_bro_revisor_noise(lower):
+        return False, False, False
+
     region_hit = _contains_any(lower, REGION_KEYWORDS)
     rapid_hit = _contains_any(lower, THREAT_KEYWORDS_RAPID)
     revisor_bonus = False
+
     if username == "bro_revisor" and _contains_any(lower, BRO_REVISOR_BONUS):
         region_hit = True
         revisor_bonus = True
+
     return region_hit, rapid_hit, revisor_bonus
 
 
@@ -158,11 +192,11 @@ def _enrich_info_message(classified: dict, lower: str, username: str):
         classified["revisor_bonus"] = True
 
     if not classified.get("threat_type"):
-        if "ракета" in lower or "ракет" in lower:
+        if "ракет" in lower:
             classified["threat_type"] = "ракета"
-        elif "шахед" in lower or "дрон" in lower or "бпла" in lower:
+        elif any(k in lower for k in ("шахед", "дрон", "бпла", "мопед", "безпілот")):
             classified["threat_type"] = "шахед/дрон"
-        elif _contains_any(lower, ["балістика", "баллистик", "миг", "міг", "кинджал", "искандер"]):
+        elif any(k in lower for k in ("баліст", "баллист", "міг", "миг", "кинджал", "іскандер", "искандер")):
             classified["threat_type"] = "балістика/МіГ"
 
 
@@ -264,13 +298,17 @@ async def official_alarm_poll_loop():
                 continue
 
             entity = await _get_entity("air_alert_ua")
-            latest = await client.get_messages(entity, limit=1)
-            if latest:
-                msg = latest[0]
-                if msg and msg.id and msg.id > _last_polled_ids.get("air_alert_ua", 0):
-                    _last_polled_ids["air_alert_ua"] = msg.id
-                    print(f"[OFFICIAL POLL] picked up message {msg.id}")
-                    await _process_message("air_alert_ua", msg.text or "", msg.id, msg.date)
+            latest = await client.get_messages(entity, limit=10)
+            last_seen_id = _last_polled_ids.get("air_alert_ua", 0)
+            new_messages = [
+                msg for msg in reversed(latest)
+                if msg and msg.id and msg.id > last_seen_id
+            ]
+
+            for msg in new_messages:
+                _last_polled_ids["air_alert_ua"] = max(_last_polled_ids.get("air_alert_ua", 0), msg.id)
+                print(f"[OFFICIAL POLL] picked up message {msg.id}")
+                await _process_message("air_alert_ua", msg.text or "", msg.id, msg.date)
         except FloodWaitError as e:
             print(f"[OFFICIAL POLL] FloodWait {e.seconds}s")
             await asyncio.sleep(e.seconds + 1)
@@ -300,21 +338,21 @@ async def channel_poll_loop():
 
                 try:
                     entity = await _get_entity(username)
-                    latest = await client.get_messages(entity, limit=1)
+                    latest = await client.get_messages(entity, limit=5)
                     if not latest:
                         continue
 
-                    msg = latest[0]
-                    if not msg or not msg.id:
-                        continue
+                    last_seen_id = _last_polled_ids.get(username, 0)
+                    new_messages = [
+                        msg for msg in reversed(latest)
+                        if msg and msg.id and msg.id > last_seen_id
+                    ]
 
-                    if msg.id <= _last_polled_ids.get(username, 0):
-                        continue
-
-                    _last_polled_ids[username] = msg.id
-                    print(f"[CHANNEL POLL] @{username} picked up message {msg.id}")
-                    await _process_message(username, msg.text or "", msg.id, msg.date)
-                    await asyncio.sleep(0.2)
+                    for msg in new_messages:
+                        _last_polled_ids[username] = max(_last_polled_ids.get(username, 0), msg.id)
+                        print(f"[CHANNEL POLL] @{username} picked up message {msg.id}")
+                        await _process_message(username, msg.text or "", msg.id, msg.date)
+                        await asyncio.sleep(0.2)
                 except FloodWaitError:
                     raise
                 except Exception as e:
