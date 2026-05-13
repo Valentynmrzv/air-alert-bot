@@ -44,6 +44,7 @@ message_queue = asyncio.Queue()
 catch_up_messages = []
 _entity_cache: dict[str, object] = {}
 _last_polled_ids: dict[str, int] = {}
+_invalid_usernames: set[str] = set()
 
 CHANNELS_PATH = BASE_DIR / "alert_sources" / "channels.json"
 with open(CHANNELS_PATH, "r", encoding="utf-8") as f:
@@ -243,8 +244,15 @@ async def handle_all_messages(event):
 
 
 async def _get_entity(username: str):
+    if username in _invalid_usernames:
+        raise ValueError(f"Skipped invalid username: {username}")
     if username not in _entity_cache:
-        _entity_cache[username] = await client.get_entity(username)
+        try:
+            _entity_cache[username] = await client.get_entity(username)
+        except Exception as e:
+            _invalid_usernames.add(username)
+            print(f"[CHANNEL RESOLVE] invalid username @{username}: {e}")
+            raise
     return _entity_cache[username]
 
 
@@ -283,27 +291,34 @@ async def channel_poll_loop():
                 if username == "air_alert_ua":
                     continue
 
+                if username in _invalid_usernames:
+                    continue
+
                 alert_active = bool(server.status.get("alert_active"))
                 if username not in SITUATION_SOURCES and not alert_active:
                     continue
 
-                entity = await _get_entity(username)
-                latest = await client.get_messages(entity, limit=1)
-                if not latest:
-                    continue
+                try:
+                    entity = await _get_entity(username)
+                    latest = await client.get_messages(entity, limit=1)
+                    if not latest:
+                        continue
 
-                msg = latest[0]
-                if not msg or not msg.id:
-                    continue
+                    msg = latest[0]
+                    if not msg or not msg.id:
+                        continue
 
-                if msg.id <= _last_polled_ids.get(username, 0):
-                    continue
+                    if msg.id <= _last_polled_ids.get(username, 0):
+                        continue
 
-                _last_polled_ids[username] = msg.id
-                print(f"[CHANNEL POLL] @{username} picked up message {msg.id}")
-                await _process_message(username, msg.text or "", msg.id, msg.date)
-
-                await asyncio.sleep(0.2)
+                    _last_polled_ids[username] = msg.id
+                    print(f"[CHANNEL POLL] @{username} picked up message {msg.id}")
+                    await _process_message(username, msg.text or "", msg.id, msg.date)
+                    await asyncio.sleep(0.2)
+                except FloodWaitError:
+                    raise
+                except Exception as e:
+                    print(f"[CHANNEL POLL] @{username} skipped: {e}")
         except FloodWaitError as e:
             print(f"[CHANNEL POLL] FloodWait {e.seconds}s")
             await asyncio.sleep(e.seconds + 1)
