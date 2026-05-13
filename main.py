@@ -261,6 +261,8 @@ async def main():
 
     await asyncio.gather(
         run_client_forever(),
+        tg_checker.official_alarm_poll_loop(),
+        tg_checker.channel_poll_loop(),
         monitor_loop(channel_id, user_chat_id, start_time),
         uptime_loop(user_chat_id, start_time),
         heartbeat_loop(),
